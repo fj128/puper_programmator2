@@ -9,8 +9,7 @@ log = logging.getLogger(__name__)
 
 from programmator.utils import tk_append_readonly_text, set_high_DPI_awareness, CallbackLogHandler
 from programmator.port_monitor import PortMonitor
-from programmator.comms import compose
-from programmator import panel
+from programmator import panel, device_memory
 
 
 class Application:
@@ -33,7 +32,7 @@ class Application:
         root_logger.addHandler(self.log_handler)
         root_logger.setLevel(logging.DEBUG) # use INFO in production. And add full logging to a file.
 
-        self.port_monitor = PortMonitor()
+        self.port_monitor = PortMonitor(self.on_connection_status_changed)
         self.start_scanning_ports()
 
         # self.receiver_thread = threading.Thread(target=self.receiver_thread_func)
@@ -54,22 +53,22 @@ class Application:
         button_panel = tk.Frame(frame)
         button_panel.pack(fill=tk.X)
 
-        button_read = tk.Button(button_panel, text='Считать')
-        button_read.pack(side=tk.LEFT)
+        self.button_read = tk.Button(button_panel, text='Считать', command=self.cmd_read, state=tk.DISABLED)
+        self.button_read.pack(side=tk.LEFT)
 
-        button_compare = tk.Button(button_panel, text='Сравнить')
-        button_compare.pack(side=tk.LEFT)
+        self.button_compare = tk.Button(button_panel, text='Сравнить', state=tk.DISABLED)
+        self.button_compare.pack(side=tk.LEFT)
 
-        button_write = tk.Button(button_panel, text='Записать')
-        button_write.pack(side=tk.LEFT)
+        self.button_write = tk.Button(button_panel, text='Записать', command=self.cmd_write, state=tk.DISABLED)
+        self.button_write.pack(side=tk.LEFT)
 
-        button_settings = tk.Button(button_panel, text='Настройки')
+        button_settings = tk.Button(button_panel, text='Настройки', state=tk.DISABLED)
         button_settings.pack(side=tk.RIGHT)
 
         separator = tk.Frame(frame, height=3, bd=1) #, relief=tk.SUNKEN
         separator.pack(fill=tk.X)
 
-        tabs = ttk.Notebook(frame)
+        tabs = self.tabs = ttk.Notebook(frame)
 
         # create log_text page ASAP to enable logging, but actually add it last
         log_page = ttk.Frame(tabs)
@@ -85,6 +84,18 @@ class Application:
         # tabs.select(tabs.index(tk.END) - 1)
 
         # self.set_initial_window_position()
+
+    def on_connection_status_changed(self, connected: bool):
+        if self.stopping:
+            return
+        if connected:
+            self.button_read.configure(state=tk.NORMAL)
+            self.button_write.configure(state=tk.DISABLED)
+            self.button_compare.configure(state=tk.DISABLED)
+        else:
+            self.button_read.configure(state=tk.DISABLED)
+            self.button_write.configure(state=tk.DISABLED)
+            self.button_compare.configure(state=tk.DISABLED)
 
 
     def log(self, s):
@@ -128,6 +139,26 @@ class Application:
         finally:
             self.root.after(1000, self.start_scanning_ports)
 
+
+    def cmd_read(self):
+        if self.port_monitor.port:
+            tabs = self.tabs
+            current_tab = tabs.select()
+            tabs.select(tabs.index('end') - 1)
+            if device_memory.read_into_memory_map(self.port_monitor.port, self.root.update_idletasks):
+                device_memory.populate_controls_from_memory_map()
+                self.button_write.configure(state=tk.NORMAL)
+                tabs.select(current_tab)
+
+
+    def cmd_write(self):
+        if self.port_monitor.port:
+            tabs = self.tabs
+            current_tab = tabs.select()
+            tabs.select(tabs.index('end') - 1)
+            if device_memory.populate_memory_map_from_controls():
+                device_memory.write_from_memory_map(self.port_monitor.port, self.root.update_idletasks)
+                tabs.select(current_tab)
 
 
     def run(self):

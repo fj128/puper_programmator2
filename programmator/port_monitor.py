@@ -27,7 +27,8 @@ def best_port(ports):
 
 
 class PortMonitor:
-    def __init__(self):
+    def __init__(self, connection_status_changed_callback=None):
+        self.connection_status_changed_callback = connection_status_changed_callback
         self.port = None
         self.ports = {}
         # after first appearing, a port is unconnectable for a while. Store this in order to keep retrying.
@@ -76,6 +77,7 @@ class PortMonitor:
             port.write_timeout = 0.5
             self.port = port
             log.info(f'Connected to {self.port.name!r}')
+            self._on_connection_status_changed(True)
             return True
         except Exception as exc:
             log.error(f'Failed to connect to {port_name!r}')
@@ -86,6 +88,13 @@ class PortMonitor:
             self.port.close()
             self.port = None
             log.info('Disconnected')
+            self._on_connection_status_changed(False)
+
+
+    def _on_connection_status_changed(self, connected: bool):
+        if self.connection_status_changed_callback:
+            self.connection_status_changed_callback(connected)
+
 
 
 

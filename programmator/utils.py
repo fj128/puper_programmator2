@@ -7,7 +7,11 @@ from typing import Callable
 def set_high_DPI_awareness():
     'Avoid blurry text on Win10 with nonstandard DPI. Must be called before initializing tk'
     from ctypes import windll
-    windll.shcore.SetProcessDpiAwareness(1)
+    try:
+        windll.shcore.SetProcessDpiAwareness(1)
+    except Exception as exc:
+        # no Windows 10 then.
+        pass
 
 
 def tk_append_readonly_text(text_widget, s, max_lines=None, line_mode=False):

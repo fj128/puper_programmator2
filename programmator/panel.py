@@ -1,6 +1,9 @@
 import tkinter as tk
 from tkinter import ttk
+
 from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth
+from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
+    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port)
 
 
 def next_grid_row(parent, column):
@@ -14,8 +17,14 @@ def grid_label_and_control(parent, label_text, control, column=0, **kwargs):
     control.grid(row=row, column=2 + column, sticky='nsew', padx=5, **kwargs)
 
 
-def grid_control(parent, control, column=0, **kwargs):
-    row = next_grid_row(parent, column)
+def grid_label_and_control_mmc(mmc_control, column=0, **kwargs):
+    parent = mmc_control.master
+    label_text = mmc_control.mmc.description
+    return grid_label_and_control(parent, label_text, mmc_control, column, **kwargs)
+
+
+def grid_control(control, column=0, **kwargs):
+    row = next_grid_row(control.master, column)
     control.grid(row=row, column=1 + column, columnspan=2, padx=5, **kwargs)
 
 
@@ -35,76 +44,77 @@ def create_widgets(tabs):
 
         if header:
             ctrl = tk.Label(page, text=header)
-            grid_control(page, ctrl, pady=7)
+            grid_control(ctrl, pady=7)
             grid_separator(page)
         return page
 
     page = add_tab('Параметры', 'Основные параметры')
 
-    ctrl = tk.Entry(page)
-    grid_label_and_control(page, 'Номер устройства', ctrl)
+    ctrl = MMC_Int(page, 'Номер устройства', [0, 1])
+    grid_label_and_control_mmc(ctrl)
 
-    var = tk.StringVar(ctrl)
-    options = ['Коммуникатор', 'DALLAS', 'ADEMCO', 'MAGELAN']
-    ctrl = tk.OptionMenu(page, var, *options)
-    tk_set_list_maxwidth(ctrl, options)
-    var.set(options[0])
-    grid_label_and_control(page, 'Тип панели', ctrl)
+    MMC_FixedByte(2)
 
-    ctrl = tk.Entry(page)
-    grid_label_and_control(page, 'Период тестовой посылки', ctrl)
+    ctrl = MMC_Choice(page, 'Тип панели', 3, [2, 1, 0], {
+        0: 'Коммуникатор',
+        1: 'DALLAS',
+        2: 'ADEMCO',
+        3: 'MAGELAN'})
+    grid_label_and_control_mmc(ctrl)
+
+
+    ctrl = MMC_Int(page, 'Период тестовой посылки (сек)', [4, 5])
+    grid_label_and_control_mmc(ctrl)
 
     ctrl = tk.Entry(page)
     grid_label_and_control(page, 'Тестовая посылка', ctrl)
 
-    var = tk.StringVar(ctrl)
-    options = ['IP 1', 'IP 2', 'Основной/резервный', 'Оба']
-    ctrl = tk.OptionMenu(page, var, *options)
-    tk_set_list_maxwidth(ctrl, options)
-    var.set(options[0])
-    grid_label_and_control(page, 'Рассылка на IP адреса', ctrl)
+    ctrl = MMC_Choice(page, 'Рассылка на IP адреса', 3, [5, 4, 3], {
+        0b100: 'IP 1',
+        0b010: 'IP 2',
+        0b110: 'Основной/резервный',
+        0b111: 'IP 1 + IP 2'})
+    grid_label_and_control_mmc(ctrl)
 
-    var = tk.IntVar(ctrl)
-    ctrl = tk.Checkbutton(page, variable=var, text='СМС на резервный номер 1')
-    grid_control(page, ctrl)
+    ctrl = MMC_Checkbutton(page, 'СМС на резервный номер 1', 3, 6)
+    grid_control(ctrl)
 
-    var = tk.IntVar(ctrl)
-    ctrl = tk.Checkbutton(page, variable=var, text='СМС на резервный номер 2')
-    grid_control(page, ctrl)
+    ctrl = MMC_Checkbutton(page, 'СМС на резервный номер 2', 3, 7)
+    grid_control(ctrl)
 
     grid_separator(page)
 
-    ctrl = tk.Entry(page)
-    grid_label_and_control(page, 'IP 1', ctrl)
+    ctrl = MMC_IP_Port(page, 'ip:port 1', 142)
+    grid_label_and_control_mmc(ctrl)
 
-    ctrl = tk.Entry(page)
-    grid_label_and_control(page, 'хост 1', ctrl)
+    ctrl = MMC_String(page, 'хост 1', 163, 20)
+    grid_label_and_control_mmc(ctrl)
 
     grid_separator(page)
 
-    ctrl = tk.Entry(page)
-    grid_label_and_control(page, 'IP 2', ctrl)
+    ctrl = MMC_IP_Port(page, 'ip:port 2', 183)
+    grid_label_and_control_mmc(ctrl)
 
-    ctrl = tk.Entry(page)
-    grid_label_and_control(page, 'хост 2', ctrl)
+    ctrl = MMC_String(page, 'хост 2', 204, 20)
+    grid_label_and_control_mmc(ctrl)
 
     ########
 
     page = add_tab('Входы', 'Конфигурация входных сигналов') #
 
     container = VerticalScrolledFrame(page)
-    grid_control(page, container, sticky='nwse')
+    grid_control(container, sticky='nwse')
     # rowconfigure adds a row lol so do this after grid_control
     page.rowconfigure(2, weight=1)
     container = container.interior
 
     for i in range(10):
         frame = tk.LabelFrame(container, text=f'Вход №{i + 1}')
-        grid_control(container, frame, pady=5)
+        grid_control(frame, pady=5)
 
         var = tk.IntVar(ctrl)
         ctrl = tk.Checkbutton(frame, variable=var, text='Вход задействован')
-        grid_control(page, ctrl, sticky='w')
+        grid_control(ctrl, sticky='w')
 
         ctrl = tk.Entry(frame)
         grid_label_and_control(frame, 'Антидребезг', ctrl, column=2)
@@ -117,19 +127,19 @@ def create_widgets(tabs):
 
         var = tk.IntVar(ctrl)
         ctrl = tk.Checkbutton(frame, variable=var, text='SMS рассылка')
-        grid_control(frame, ctrl, sticky='w')
+        grid_control(ctrl, sticky='w')
 
         var = tk.IntVar(ctrl)
         ctrl = tk.Checkbutton(frame, variable=var, text='24х часовой')
-        grid_control(frame, ctrl, column=2, sticky='w')
+        grid_control(ctrl, column=2, sticky='w')
 
         var = tk.IntVar(ctrl)
         ctrl = tk.Checkbutton(frame, variable=var, text='Выход 1 управляется')
-        grid_control(frame, ctrl, sticky='w')
+        grid_control(ctrl, sticky='w')
 
         var = tk.IntVar(ctrl)
         ctrl = tk.Checkbutton(frame, variable=var, text='Выход 2 управляется')
-        grid_control(frame, ctrl, column=2, sticky='w')
+        grid_control(ctrl, column=2, sticky='w')
 
         ctrl = tk.Entry(frame)
         grid_label_and_control(frame, 'Команда тревоги', ctrl)
@@ -152,19 +162,19 @@ def create_widgets(tabs):
 
     for i in range(2):
         frame = tk.LabelFrame(container, text=f'Выход №{i + 1}')
-        grid_control(container, frame, pady=5)
+        grid_control(frame, pady=5)
 
         var = tk.IntVar(ctrl)
         ctrl = tk.Checkbutton(frame, variable=var, text='Выход задействован')
-        grid_control(page, ctrl, sticky='w')
+        grid_control(ctrl, sticky='w')
 
         var = tk.IntVar(ctrl)
         ctrl = tk.Checkbutton(frame, variable=var, text='Импульсный')
-        grid_control(frame, ctrl, sticky='w')
+        grid_control(ctrl, sticky='w')
 
         var = tk.IntVar(ctrl)
         ctrl = tk.Checkbutton(frame, variable=var, text='Нормально разомкнут')
-        grid_control(frame, ctrl, column=2, sticky='w')
+        grid_control(ctrl, column=2, sticky='w')
 
         ctrl = tk.Entry(frame)
         grid_label_and_control(frame, 'Длительность при постановке', ctrl)
@@ -180,11 +190,11 @@ def create_widgets(tabs):
 
         var = tk.IntVar(ctrl)
         ctrl = tk.Checkbutton(frame, variable=var, text='Программируемый через СМС')
-        grid_control(frame, ctrl, sticky='w')
+        grid_control(ctrl, sticky='w')
 
         var = tk.IntVar(ctrl)
         ctrl = tk.Checkbutton(frame, variable=var, text='Зависимый от входов')
-        grid_control(frame, ctrl, column=2, sticky='w')
+        grid_control(ctrl, column=2, sticky='w')
 
         grid_separator(frame, False)
 
@@ -195,7 +205,7 @@ def create_widgets(tabs):
 
     page = add_tab('Телефоны', 'Белый список телефонов пользователей и права')
     container = tk.Frame(page)
-    grid_control(page, container)
+    grid_control(container)
 
     for i in range(10):
         row = next_grid_row(container, 0)
@@ -210,19 +220,19 @@ def create_widgets(tabs):
 
         var = tk.IntVar(frame)
         ctrl = tk.Checkbutton(frame, variable=var, text='PGM1')
-        grid_control(frame, ctrl)
+        grid_control(ctrl)
 
         var = tk.IntVar(frame)
         ctrl = tk.Checkbutton(frame, variable=var, text='PGM2')
-        grid_control(frame, ctrl, column=2)
+        grid_control(ctrl, column=2)
 
         var = tk.IntVar(frame)
         ctrl = tk.Checkbutton(frame, variable=var, text='Arm/disarm')
-        grid_control(frame, ctrl, column=4)
+        grid_control(ctrl, column=4)
 
         var = tk.IntVar(frame)
         ctrl = tk.Checkbutton(frame, variable=var, text='Смена PIN')
-        grid_control(frame, ctrl, column=6)
+        grid_control(ctrl, column=6)
 
         grid_separator(container, columnspan=4)
 
@@ -237,6 +247,8 @@ def create_widgets(tabs):
         grid_label_and_control(page, f'Сообщение №{i + 1}', ctrl, pady=5)
 
     page = add_tab('X-Ссылки?')
+
+    finish_initialization()
 
 
 if __name__ == '__main__':

@@ -1,12 +1,25 @@
 from dataclasses import dataclass
 import serial
 
+import logging
+log = logging.getLogger(__name__)
+
+
+ERROR_CODES = {
+    0x31 : 'неправильная длина посылки',
+	0x32 : 'ошибка контрольной суммы',
+    0x33 : 'нет 0x0D в конце посылки',
+    0x34 : 'неизвестная команда',
+}
+
 
 @dataclass
 class Message:
     command: int
     address: int
     data: bytes
+    def __repr__(self):
+        return f'Message({self.command}, {self.address:04X}, [{pretty_hexlify(self.data)}])'
 
 
 def pretty_hexlify(data):
@@ -43,6 +56,9 @@ class ParseError(Exception):
     def __str__(self):
         return f'Parse failed: {self.reason}, after reading {pretty_hexlify(self.buffer)}'
 
+
+class CommunicationError(Exception):
+    ''
 
 class TimeoutError(ParseError):
     def __init__(self, buffer, waiting_for):
@@ -99,20 +115,55 @@ def receive(port):
         try:
             return receive_one(port)
         except TimeoutError as exc:
-            print(exc)
-            return
+            log.error(str(exc))
+            raise
         except ParseError as exc:
-            print(exc)
+            log.error(str(exc))
             continue
 
 
 def send_receive(port: serial.Serial, msg: Message) -> Message:
-    # just in case
-    port.reset_input_buffer()
-    port.reset_output_buffer()
-    port.write(compose(msg.command, msg.address, msg.data))
-    return receive(port)
+    retries = 10
+    for i in range(retries): # retries because currently communication is hard.
+        # just in case
+        port.reset_input_buffer()
+        port.reset_output_buffer()
+        log.debug(f'cmd {msg.command} at {msg.address:04X}: {pretty_hexlify(msg.data)}')
+        raw = compose(msg.command, msg.address, msg.data)
+        log.debug(pretty_hexlify(raw))
+        port.write(raw)
+        try:
+            response = None # initialize the variable
+            response = receive(port)
+            break
+        except TimeoutError as exc:
+            if not len(exc.buffer):
+                log.warning(f'retrying {i + 1}/10')
 
+    if response is None:
+        return
 
-if __name__ == '__main__':
-    main()
+    log.debug(f'got {response.command} {response.address:04X}: {pretty_hexlify(response.data)}')
+    if response.command == 2:
+        if msg.command == 0:
+            if response.data == msg.data:
+                return response
+            raise CommunicationError('Неверные данные в контрольном считывании: хотели {}, получили {}'.format(
+                pretty_hexlify(msg.data), pretty_hexlify(response.data)))
+        elif msg.command == 1:
+            if len(response.data) == len(msg.data):
+                return response
+            raise CommunicationError('Неверная длина ответа: хотели {} байт, получили {}'.format(
+                len(msg.data), pretty_hexlify(response.data)))
+        else:
+            assert False
+
+    if response.command == 3:
+        if len(response.data) == 1:
+            [code] = response.data
+            if code in ERROR_CODES:
+                raise CommunicationError(f'Устройство вернуло ошибку: {ERROR_CODES[code]}')
+            else:
+                raise CommunicationError(f'Устройство вернуло неизвестную ошибку: {code:02X}')
+    raise CommunicationError(f'Устройство вернуло непонятное сообщение: {response}')
+

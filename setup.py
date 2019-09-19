@@ -11,7 +11,7 @@ if sys.platform == "win32":
     base = "Win32GUI"
 
 setup(  name = 'puper_programmator2',
-        version = '0.1',
+        version = '0.0.2',
         description = 'Programmator!',
         options = {'build_exe': build_exe_options},
         executables = [
