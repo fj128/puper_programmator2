@@ -40,8 +40,6 @@ class Application:
 
 
     def create_widgets(self, root):
-        padding = {'padx': 1, 'pady': 1}
-
         frame = self.frame = tk.Frame(root)
         root = self.root = self.frame.master
 
@@ -142,23 +140,32 @@ class Application:
 
     def cmd_read(self):
         if self.port_monitor.port:
-            tabs = self.tabs
-            current_tab = tabs.select()
-            tabs.select(tabs.index('end') - 1)
-            if device_memory.read_into_memory_map(self.port_monitor.port, self.root.update_idletasks):
-                device_memory.populate_controls_from_memory_map()
-                self.button_write.configure(state=tk.NORMAL)
-                tabs.select(current_tab)
+            try:
+                tabs = self.tabs
+                current_tab = tabs.select()
+                tabs.select(tabs.index('end') - 1)
+                if device_memory.read_into_memory_map(self.port_monitor.port, self.root.update_idletasks):
+                    device_memory.populate_controls_from_memory_map()
+                    self.button_write.configure(state=tk.NORMAL)
+                    tabs.select(current_tab)
+            except Exception as exc:
+                log.error(exc)
+                # TODO: proper exception handling
+                raise # tkinter will print it to stdout
 
 
     def cmd_write(self):
         if self.port_monitor.port:
-            tabs = self.tabs
-            current_tab = tabs.select()
-            tabs.select(tabs.index('end') - 1)
-            if device_memory.populate_memory_map_from_controls():
-                device_memory.write_from_memory_map(self.port_monitor.port, self.root.update_idletasks)
-                tabs.select(current_tab)
+            try:
+                tabs = self.tabs
+                current_tab = tabs.select()
+                tabs.select(tabs.index('end') - 1)
+                if device_memory.populate_memory_map_from_controls():
+                    device_memory.write_from_memory_map(self.port_monitor.port, self.root.update_idletasks)
+                    tabs.select(current_tab)
+            except Exception as exc:
+                log.error(exc)
+                raise # tkinter will print it to stdout
 
 
     def run(self):
@@ -173,6 +180,7 @@ def main():
     set_high_DPI_awareness()
     app = Application()
     app.run()
+
 
 
 if __name__ == '__main__':

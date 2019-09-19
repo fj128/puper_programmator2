@@ -1,2 +1,2 @@
-pyserial-3.4
-cx-Freeze-6.0
+pyserial
+cx-Freeze

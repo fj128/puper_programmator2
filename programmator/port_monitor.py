@@ -80,7 +80,7 @@ class PortMonitor:
             self._on_connection_status_changed(True)
             return True
         except Exception as exc:
-            log.error(f'Failed to connect to {port_name!r}')
+            log.error(f'Failed to connect to {port_name!r}: {exc}')
 
 
     def disconnect(self):

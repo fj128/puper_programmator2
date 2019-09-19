@@ -1,9 +1,9 @@
-from typing import Union, List
+from typing import Union, List, Dict, Tuple, Sequence
 import functools
 import tkinter as tk
 import re
 
-from programmator.utils import tk_set_list_maxwidth
+from programmator.utils import tk_set_list_maxwidth, pretty_hexlify
 from programmator.comms import send_receive, Message
 
 import logging
@@ -11,17 +11,17 @@ log = logging.getLogger(__name__)
 
 # static descriptions
 
-controls = []
+controls: 'List[MMC_Base]' = []
 
 # used for sanity checking the model
-bit_memory_registry = {}
-byte_memory_registry = {}
+bit_memory_registry: 'Dict[int, Dict[int, MMC_Base]]' = {}
+byte_memory_registry: 'Dict[int, MMC_Base]' = {}
 
-memory_spans = []
+memory_spans: List[Tuple[int, int]] = []
 
 # actual dynamic memory
 
-memory_map = {}
+memory_map: Dict[int, int] = {}
 
 
 # API
@@ -60,8 +60,7 @@ def read_into_memory_map(port, callback):
     memory_map.clear()
     for start, end in memory_spans:
         msg = Message(1, start, [0] * (end - start))
-        callback()
-        msg = send_receive(port, msg)
+        msg = send_receive(port, msg, callback)
         if msg is None:
             memory_map.clear()
             return
@@ -77,12 +76,8 @@ def populate_controls_from_memory_map():
 
 def populate_memory_map_from_controls():
     memory_map.clear()
-    try:
-        for control in controls:
-            control.to_memory_map()
-    except Exception as exc:
-        log.error(str(exc))
-        raise
+    for control in controls:
+        control.to_memory_map()
     return True
 
 
@@ -90,8 +85,7 @@ def populate_memory_map_from_controls():
 def write_from_memory_map(port, callback):
     for start, end in memory_spans:
         msg = Message(0, start, [memory_map[i] for i in range(start, end)])
-        callback()
-        msg = send_receive(port, msg)
+        msg = send_receive(port, msg, callback)
         if msg is None:
             memory_map.clear()
             return
@@ -117,10 +111,10 @@ def register_byte(control, address: int):
     assert control is not None
     other = byte_memory_registry.get(address)
     assert not other, f'{control!r} wants to use address {address} already used by {other!r}'
-    other = bit_memory_registry.get(address)
-    if other:
-        other = next(iter(other.items()))
-    assert not other, f'{control!r} wants to use address {address} already used by {other!r}'
+    bits = bit_memory_registry.get(address, None)
+    if bits:
+        other = next(iter(bits.values()))
+        assert False, f'{control!r} wants to use address {address} already used by {other!r}'
     byte_memory_registry[address] = control
 
 
@@ -183,7 +177,8 @@ class MMC_Bits(MMC_Base):
         return acc
 
 
-    def to_memory_map_raw(self, value: int):
+    def to_memory_map_raw(self, value):
+        assert isinstance(value, int)
         byte = memory_map.get(self.address, 0)
         for b in reversed(self.bits):
             byte |= (value & 1) << b
@@ -192,7 +187,7 @@ class MMC_Bits(MMC_Base):
 
 
 class MMC_Bytes(MMC_Base):
-    def __init__(self, description: str, addresses: List[int]):
+    def __init__(self, description: str, addresses: Sequence[int]):
         super().__init__(description, f'{addresses[0]}')
         self.addresses = addresses
         for a in self.addresses:
@@ -203,7 +198,7 @@ class MMC_Bytes(MMC_Base):
         return bytes(memory_map[a] for a in self.addresses)
 
 
-    def to_memory_map_raw(self, values: List[int]):
+    def to_memory_map_raw(self, values):
         assert len(values) == len(self.addresses)
         for addr, val in zip(self.addresses, values):
             memory_map[addr] = val
@@ -406,4 +401,56 @@ class MMC_IP_Port(MMC_Bytes):
 
         ip, port = m.groups()
         self.to_memory_map_raw(str_to_bytes(ip, self.ip_length) + str_to_bytes(port, self.port_length))
+
+
+@return_wrapped_control
+class MMC_BCD(MMC_Bytes):
+    def __init__(self, parent, text: str, address: int, length: int):
+        'Length is in _nibbles_'
+        super().__init__(text, range(address, address + (length + 1) // 2))
+        self.length = length
+        self.var = tk.StringVar(parent)
+        self.control = tk.Entry(parent, textvariable=self.var)
+        self.set_default_value()
+
+
+    def set_default_value(self):
+        self.var.set('0' * self.length)
+
+
+    def from_memory_map(self):
+        val = self.from_memory_map_raw()
+        def validate_digit(digit):
+            if not 0 <= digit <= 9:
+                raise Exception(f'{self}: недесятичная цифра в данных: {pretty_hexlify(val)}')
+            return digit
+        result = []
+        try:
+            for b in val:
+                result.append(str(validate_digit(b >> 4)))
+                if len(result) < self.length:
+                    result.append(str(validate_digit(b & 0x0F)))
+                elif b & 0x0F:
+                        raise Exception(f'{self}: последний ниббл в данных должен быть нулём: {pretty_hexlify(val)}')
+        except Exception as exc:
+            log.error(exc)
+            self.set_default_value()
+            return
+        assert len(result) == self.length
+        self.var.set(''.join(result))
+
+
+    def to_memory_map(self):
+        s = self.var.get().strip()
+        if len(s) != self.length:
+            raise Exception(f'{self}: неправильная длина: {s!r} ({len(s)}), должна быть {self.length}')
+
+        result = []
+        for i, c in enumerate(s):
+            if not i & 1:
+                result.append(int(c) << 4)
+            else:
+                result[-1] |= int(c)
+        self.to_memory_map_raw(result)
+
 

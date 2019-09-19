@@ -3,14 +3,14 @@ from tkinter import ttk
 
 from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
-    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port)
+    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD)
 
 
 def next_grid_row(parent, column):
     return parent.grid_size()[1] - (1 if column > 1 else 0)
 
 
-def grid_label_and_control(parent, label_text, control, column=0, **kwargs):
+def grid_label_and_control(parent, label_text: str, control, column=0, **kwargs):
     row = next_grid_row(parent, column)
     label = tk.Label(parent, text=label_text)
     label.grid(row=row, column=1 + column, padx=5, **kwargs)
@@ -35,7 +35,7 @@ def grid_separator(parent, visible=True, columnspan=2):
 
 
 def create_widgets(tabs):
-    def add_tab(name, header=None):
+    def add_tab(name: str, header=''):
         page = ttk.Frame(tabs)
 
         tabs.add(page, text=name)
@@ -50,7 +50,7 @@ def create_widgets(tabs):
 
     page = add_tab('Параметры', 'Основные параметры')
 
-    ctrl = MMC_Int(page, 'Номер устройства', [0, 1])
+    ctrl = MMC_BCD(page, 'Номер устройства', 0, 4)
     grid_label_and_control_mmc(ctrl)
 
     MMC_FixedByte(2)
@@ -66,8 +66,8 @@ def create_widgets(tabs):
     ctrl = MMC_Int(page, 'Период тестовой посылки (сек)', [4, 5])
     grid_label_and_control_mmc(ctrl)
 
-    ctrl = tk.Entry(page)
-    grid_label_and_control(page, 'Тестовая посылка', ctrl)
+    ctrl = MMC_BCD(page, 'Тестовая посылка', 6, 7) # TODO: 7 can't be right
+    grid_label_and_control_mmc(ctrl)
 
     ctrl = MMC_Choice(page, 'Рассылка на IP адреса', 3, [5, 4, 3], {
         0b100: 'IP 1',
@@ -87,7 +87,7 @@ def create_widgets(tabs):
     ctrl = MMC_IP_Port(page, 'ip:port 1', 142)
     grid_label_and_control_mmc(ctrl)
 
-    ctrl = MMC_String(page, 'хост 1', 163, 20)
+    ctrl = MMC_String(page, 'APN 1', 163, 20)
     grid_label_and_control_mmc(ctrl)
 
     grid_separator(page)
@@ -95,8 +95,9 @@ def create_widgets(tabs):
     ctrl = MMC_IP_Port(page, 'ip:port 2', 183)
     grid_label_and_control_mmc(ctrl)
 
-    ctrl = MMC_String(page, 'хост 2', 204, 20)
+    ctrl = MMC_String(page, 'APN 2', 204, 20)
     grid_label_and_control_mmc(ctrl)
+
 
     ########
 
@@ -246,7 +247,7 @@ def create_widgets(tabs):
         ctrl = tk.Entry(page)
         grid_label_and_control(page, f'Сообщение №{i + 1}', ctrl, pady=5)
 
-    page = add_tab('X-Ссылки?')
+    # page = add_tab('X-Ссылки?')
 
     finish_initialization()
 

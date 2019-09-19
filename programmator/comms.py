@@ -1,5 +1,8 @@
 from dataclasses import dataclass
+from typing import Optional
 import serial
+
+from programmator.utils import pretty_hexlify
 
 import logging
 log = logging.getLogger(__name__)
@@ -7,7 +10,7 @@ log = logging.getLogger(__name__)
 
 ERROR_CODES = {
     0x31 : 'неправильная длина посылки',
-	0x32 : 'ошибка контрольной суммы',
+    0x32 : 'ошибка контрольной суммы',
     0x33 : 'нет 0x0D в конце посылки',
     0x34 : 'неизвестная команда',
 }
@@ -19,11 +22,7 @@ class Message:
     address: int
     data: bytes
     def __repr__(self):
-        return f'Message({self.command}, {self.address:04X}, [{pretty_hexlify(self.data)}])'
-
-
-def pretty_hexlify(data):
-    return ' '.join(f'{b:02X}' for b in data)
+        return f'Message({self.command}, {self.address}, [{pretty_hexlify(self.data)}])'
 
 
 def compose(cmd, address, data):
@@ -48,17 +47,18 @@ def compose(cmd, address, data):
     return res
 
 
+class CommunicationError(Exception):
+    pass
+
+
 @dataclass
-class ParseError(Exception):
+class ParseError(CommunicationError):
     reason: str
     buffer: bytearray
 
     def __str__(self):
         return f'Parse failed: {self.reason}, after reading {pretty_hexlify(self.buffer)}'
 
-
-class CommunicationError(Exception):
-    ''
 
 class TimeoutError(ParseError):
     def __init__(self, buffer, waiting_for):
@@ -93,7 +93,7 @@ def receive_one(port):
     data = [read() for _ in range(length)]
 
     waiting_for = 'crc'
-    crc = read()
+    _crc = read()
 
     computed_crc = sum(buffer) & 0xFF
     if computed_crc and False: # currently broken
@@ -115,35 +115,24 @@ def receive(port):
         try:
             return receive_one(port)
         except TimeoutError as exc:
-            log.error(str(exc))
             raise
         except ParseError as exc:
             log.error(str(exc))
             continue
 
 
-def send_receive(port: serial.Serial, msg: Message) -> Message:
-    retries = 10
-    for i in range(retries): # retries because currently communication is hard.
-        # just in case
-        port.reset_input_buffer()
-        port.reset_output_buffer()
-        log.debug(f'cmd {msg.command} at {msg.address:04X}: {pretty_hexlify(msg.data)}')
-        raw = compose(msg.command, msg.address, msg.data)
-        log.debug(pretty_hexlify(raw))
-        port.write(raw)
-        try:
-            response = None # initialize the variable
-            response = receive(port)
-            break
-        except TimeoutError as exc:
-            if not len(exc.buffer):
-                log.warning(f'retrying {i + 1}/10')
+def send_receive_once(port: serial.Serial, msg: Message) -> Message:
+    port.reset_input_buffer()
+    port.reset_output_buffer()
+    log.debug(f'sending command: {msg.command} at {msg.address}: {pretty_hexlify(msg.data)}')
+    raw = compose(msg.command, msg.address, msg.data)
+    log.debug(f'sending raw bytes: {pretty_hexlify(raw)}')
 
-    if response is None:
-        return
+    port.write(raw)
+    response = receive(port)
 
-    log.debug(f'got {response.command} {response.address:04X}: {pretty_hexlify(response.data)}')
+    log.debug(f'received command: {response.command} {response.address}: {pretty_hexlify(response.data)}')
+
     if response.command == 2:
         if msg.command == 0:
             if response.data == msg.data:
@@ -158,7 +147,7 @@ def send_receive(port: serial.Serial, msg: Message) -> Message:
         else:
             assert False
 
-    if response.command == 3:
+    if response.command == 3 or response.command == 0: # FIXME: 0 is a device bug
         if len(response.data) == 1:
             [code] = response.data
             if code in ERROR_CODES:
@@ -167,3 +156,16 @@ def send_receive(port: serial.Serial, msg: Message) -> Message:
                 raise CommunicationError(f'Устройство вернуло неизвестную ошибку: {code:02X}')
     raise CommunicationError(f'Устройство вернуло непонятное сообщение: {response}')
 
+
+def send_receive(port: serial.Serial, msg: Message, tk_callback=None) -> Optional[Message]:
+    retries = 10
+    for i in range(retries): # retries because currently communication is hard.
+        if i:
+            log.warning(f'retrying {i + 1}/10')
+        try:
+            if tk_callback:
+                tk_callback()
+            return send_receive_once(port, msg)
+        except CommunicationError as exc:
+            log.error(str(exc))
+    return None

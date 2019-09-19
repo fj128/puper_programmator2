@@ -4,12 +4,16 @@ import logging
 from typing import Callable
 
 
+def pretty_hexlify(data):
+    return ' '.join(f'{b:02X}' for b in data)
+
+
 def set_high_DPI_awareness():
     'Avoid blurry text on Win10 with nonstandard DPI. Must be called before initializing tk'
     from ctypes import windll
     try:
         windll.shcore.SetProcessDpiAwareness(1)
-    except Exception as exc:
+    except Exception:
         # no Windows 10 then.
         pass
 
