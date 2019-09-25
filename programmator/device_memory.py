@@ -3,7 +3,7 @@ import functools
 import tkinter as tk
 import re
 
-from programmator.utils import tk_set_list_maxwidth, pretty_hexlify
+from programmator.utils import tk_set_list_maxwidth, pretty_hexlify, timeit_block
 from programmator.comms import send_receive, Message
 
 import logging
@@ -40,7 +40,7 @@ def finish_initialization():
     start = None
     prev = None
     page_mask = 0xFF80
-    bytes_per_span = 4 # 16 bugs out more often than not.
+    bytes_per_span = 8 # 16 bugs out more often than not.
 
     for addr in addresses:
         if start is None:
@@ -58,15 +58,16 @@ def finish_initialization():
 
 def read_into_memory_map(port, callback):
     memory_map.clear()
-    for start, end in memory_spans:
-        msg = Message(1, start, [0] * (end - start))
-        msg = send_receive(port, msg, callback)
-        if msg is None:
-            memory_map.clear()
-            return
-        for i, b in enumerate(msg.data):
-            memory_map[start + i] = b
-    return True
+    with timeit_block('Reading device memory'):
+        for start, end in memory_spans:
+            msg = Message(1, start, [0] * (end - start))
+            msg = send_receive(port, msg, callback)
+            if msg is None:
+                memory_map.clear()
+                return
+            for i, b in enumerate(msg.data):
+                memory_map[start + i] = b
+        return True
 
 
 def populate_controls_from_memory_map():

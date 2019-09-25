@@ -57,7 +57,7 @@ class ParseError(CommunicationError):
     buffer: bytearray
 
     def __str__(self):
-        return f'Parse failed: {self.reason}, after reading {pretty_hexlify(self.buffer)}'
+        return f'Parse failed: {self.reason}, after reading [{pretty_hexlify(self.buffer)}]'
 
 
 class TimeoutError(ParseError):
@@ -126,6 +126,7 @@ def send_receive_once(port: serial.Serial, msg: Message) -> Message:
     port.reset_output_buffer()
     log.debug(f'sending command: {msg.command} at {msg.address}: {pretty_hexlify(msg.data)}')
     raw = compose(msg.command, msg.address, msg.data)
+    raw += b' ' * 16 # TODO: configurable
     log.debug(f'sending raw bytes: {pretty_hexlify(raw)}')
 
     port.write(raw)

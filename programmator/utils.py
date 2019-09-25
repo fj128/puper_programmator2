@@ -2,10 +2,23 @@ import tkinter as tk
 import tkinter.font
 import logging
 from typing import Callable
+from contextlib import contextmanager
+
+import logging
+log = logging.getLogger(__name__)
 
 
 def pretty_hexlify(data):
     return ' '.join(f'{b:02X}' for b in data)
+
+
+@contextmanager
+def timeit_block(what='Something'):
+    import timeit
+    t = timeit.default_timer()
+    yield
+    t2 = timeit.default_timer()
+    log.debug(f'{what} took {t2 - t:0.3f} seconds')
 
 
 def set_high_DPI_awareness():
