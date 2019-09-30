@@ -24,27 +24,26 @@ class Message:
     def __repr__(self):
         return f'Message({self.command}, {self.address}, [{pretty_hexlify(self.data)}])'
 
+    def compose(self):
+        '''Compose a command in our pseudo IntelHEX format
 
-def compose(cmd, address, data):
-    '''Compose a command in our pseudo IntelHEX format
+        >>> s = compose(3, 0x1234, [0x30, 0x40, 0x50, 0xFF])
+        >>> sum(s[:-1]) & 0xFF
+        0
+        >>> pretty_hexlify(s)
+        '3A 04 12 34 33 30 40 50 FF 8A 0D'
 
-    >>> s = compose(3, 0x1234, [0x30, 0x40, 0x50, 0xFF])
-    >>> sum(s[:-1]) & 0xFF
-    0
-    >>> pretty_hexlify(s)
-    '3A 04 12 34 33 30 40 50 FF 8A 0D'
-
-    '''
-    res = bytearray()
-    res.append(ord(':'))
-    res.append(len(data))
-    res.append(address >> 8)
-    res.append(address & 0xFF)
-    res.append(cmd | 0x30) # currently required
-    res.extend(data)
-    res.append(-sum(res) & 0xFF)
-    res.append(0x0D)
-    return res
+        '''
+        res = bytearray()
+        res.append(ord(':'))
+        res.append(len(self.data))
+        res.append(self.address >> 8)
+        res.append(self.address & 0xFF)
+        res.append(self.command | 0x30) # currently required
+        res.extend(self.data)
+        res.append(-sum(res) & 0xFF)
+        res.append(0x0D)
+        return res
 
 
 class CommunicationError(Exception):
@@ -125,7 +124,7 @@ def send_receive_once(port: serial.Serial, msg: Message) -> Message:
     port.reset_input_buffer()
     port.reset_output_buffer()
     log.debug(f'sending command: {msg.command} at {msg.address}: {pretty_hexlify(msg.data)}')
-    raw = compose(msg.command, msg.address, msg.data)
+    raw = msg.compose()
     raw += b' ' * 16 # TODO: configurable
     log.debug(f'sending raw bytes: {pretty_hexlify(raw)}')
 

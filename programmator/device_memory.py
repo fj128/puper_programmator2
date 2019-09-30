@@ -40,7 +40,7 @@ def finish_initialization():
     start = None
     prev = None
     page_mask = 0xFF80
-    bytes_per_span = 8 # 16 bugs out more often than not.
+    bytes_per_span = 6
 
     for addr in addresses:
         if start is None:

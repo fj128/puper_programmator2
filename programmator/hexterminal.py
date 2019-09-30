@@ -11,25 +11,36 @@ log = logging.getLogger(__name__)
 
 from programmator.utils import tk_append_readonly_text, set_high_DPI_awareness, CallbackLogHandler
 from programmator.port_monitor import PortMonitor
-from programmator.comms import compose
+from programmator.comms import Message
 
 
 class ParseError(Exception):
-    def __init__(self, msg, column, column_end):
-        super().__init__(msg)
+    def __init__(self, msg, column, column_end=None, line=None):
+        '''Both line and column are 0-based on input, adjusted to 1-based on output
+        Note that in tk indexing 'Line numbers start at 1, while column numbers start at 0,
+        like Python sequence indexes' but I will not abide by this retarded convention.
+        '''
+        linespec = f'line {line + 1} ' if line else ''
+        columnspec = (
+            f'column {column + 1}' +
+            (f'-{column_end}' if (column_end and column_end != column + 1) else ''))
+        super().__init__(f'{msg} at {linespec}{columnspec}')
+        self.msg = msg
         self.column = column
-        self.column_end = column_end
+        self.column_end = column_end if column_end else column + 1
+        self.line = line
 
 
-def parse_hex_input(s: str):
+def parse_hex_input(s: str, offset=0):
+    '`offset` is used for error reporting'
     def check_hex_digit(c, pos):
         if c not in string.hexdigits:
-            raise ParseError(f'Invalid hex digit {c!r} at {pos}', pos, pos + 1)
+            raise ParseError(f'Invalid hex digit {c!r}', pos + offset)
     res = bytearray()
     for match in re.finditer(r'[^\s]+', s):
         group = match.group(0)
         if len(group) & 1:
-            raise ParseError(f'Odd length group at {match.start()}', match.start(), match.end())
+            raise ParseError(f'Odd length group', match.start() + offset, match.end() + offset)
         for i in range(0, len(group), 2):
             check_hex_digit(group[i], i + match.start())
             check_hex_digit(group[i + 1], i + 1 + match.start())
@@ -131,7 +142,7 @@ class Application:
             if arr[0] not in (0, 1):
                 log.error('Command must be 00 or 01')
                 return
-            tmp = compose(arr[0], arr[1] * 256 + arr[2], arr[3:])
+            tmp = Message(arr[0], arr[1] * 256 + arr[2], arr[3:]).compose()
             self.append_main_text_line('! ' + ' '.join(f'{c:02X}' for c in arr))
             arr = tmp
 

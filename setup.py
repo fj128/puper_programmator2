@@ -26,4 +26,8 @@ setup(  name = 'puper_programmator2',
                 'programmator/hexterminal.py',
                 base=base,
                 targetName='hexterminal'),
+            Executable(
+                'programmator/intelhex.py',
+                # use default base for console application
+                targetName='intelhex'),
         ])
