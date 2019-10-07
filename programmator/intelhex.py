@@ -83,7 +83,7 @@ def read(args):
 
 
 def write(args):
-    print(f'write {args}')
+    print(f'write {args} (not implemented lol)')
 
 
 def main():
