@@ -1,20 +1,24 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 
 from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
     MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD)
 
 
-def next_grid_row(parent, column):
-    return parent.grid_size()[1] - (1 if column > 1 else 0)
+def next_grid_row(parent, column=0):
+    return parent.grid_size()[1] - bool(column)
+
+
+def grid_control_and_control(parent, control1, control2, column=0, **kwargs):
+    row = next_grid_row(parent, column)
+    control1.grid(row=row, column=1 + column, sticky='nsew', padx=5, **kwargs)
+    control2.grid(row=row, column=2 + column, sticky='nsew', padx=5, **kwargs)
 
 
 def grid_label_and_control(parent, label_text: str, control, column=0, **kwargs):
-    row = next_grid_row(parent, column)
     label = tk.Label(parent, text=label_text)
-    label.grid(row=row, column=1 + column, padx=5, **kwargs)
-    control.grid(row=row, column=2 + column, sticky='nsew', padx=5, **kwargs)
+    grid_control_and_control(parent, label, control, column=column, **kwargs)
 
 
 def grid_label_and_control_mmc(mmc_control, column=0, **kwargs):
@@ -70,9 +74,52 @@ def create_widgets(tabs):
     ctrl.mmc.var.set(30) # todo - saner default
     grid_label_and_control_mmc(ctrl)
 
-    ctrl = MMC_BCD(page, 'Тестовая посылка', 6, 7) # TODO: 7 can't be right
+    ctrl = MMC_BCD(page, 'Тестовая посылка', 6, 7)
     ctrl.mmc.var.set('16A2AAAAA')
     grid_label_and_control_mmc(ctrl)
+
+    # SIM1
+
+    def SIM(n, apn_offset):
+        row = next_grid_row(page)
+        frame = tk.Frame(page)
+
+        ctrl = tk.Label(frame, text=f'APN{n}')
+        ctrl.pack(side=tk.RIGHT, padx=(30, 0))
+
+        var = tk.IntVar(frame)
+        ctrl = tk.Checkbutton(frame, text=f'SIM{n}', var=var)
+        ctrl.var = var # prevents var from being garbage collected
+        if n == 1:
+            var.set(1)
+            ctrl.config(state=tk.DISABLED)
+        ctrl.pack(side=tk.RIGHT)
+
+        ctrl = MMC_String(page, f'APN{n}', apn_offset, 20)
+        grid_control_and_control(page, frame, ctrl)
+
+    SIM(1, 163)
+    SIM(2, 204)
+
+    grid_separator(page)
+
+    def master_code_click():
+        code = master_code.get().strip()
+        if code != '123456':
+            messagebox.showerror(title='Ошибка!', message='Неправильный код установщика. Тестовый код: 123456')
+        else:
+            for it in master_controls:
+                it.configure(state=tk.NORMAL)
+
+    row = next_grid_row(page)
+    ctrl1 = tk.Button(page, text='Ввести код установщика', command=master_code_click)
+    ctrl1.grid(row=row, column=1, padx=5)
+    master_code = tk.Entry(page)
+    master_code.grid(row=row, column=2, padx=5, sticky='nwse')
+
+    master_controls = []
+
+    grid_separator(page)
 
     ctrl = MMC_Choice(page, 'Раппорт на IP адреса', 3, [5, 4, 3], {
         0b100: 'IP 1',
@@ -81,28 +128,24 @@ def create_widgets(tabs):
         0b111: 'IP 1 + IP 2'})
     grid_label_and_control_mmc(ctrl)
 
-    ctrl = MMC_Checkbutton(page, 'СМС на резервный номер 1', 3, 6)
-    grid_control(ctrl)
-
-    ctrl = MMC_Checkbutton(page, 'СМС на резервный номер 2', 3, 7)
-    grid_control(ctrl)
-
-    grid_separator(page)
-
     ctrl = MMC_IP_Port(page, 'ip:port 1', 142)
     grid_label_and_control_mmc(ctrl)
+    master_controls.append(ctrl)
 
-    ctrl = MMC_String(page, 'APN 1', 163, 20)
-    grid_label_and_control_mmc(ctrl)
+    ctrl = MMC_Checkbutton(page, 'СМС на резервный телефон №1', 3, 6)
+    grid_control(ctrl)
 
-    grid_separator(page)
+    # grid_separator(page)
 
     ctrl = MMC_IP_Port(page, 'ip:port 2', 183)
     grid_label_and_control_mmc(ctrl)
+    master_controls.append(ctrl)
 
-    ctrl = MMC_String(page, 'APN 2', 204, 20)
-    grid_label_and_control_mmc(ctrl)
+    ctrl = MMC_Checkbutton(page, 'СМС на резервный телефон №2', 3, 7)
+    grid_control(ctrl)
 
+    for it in master_controls:
+        it.configure(state=tk.DISABLED)
 
     ########
 

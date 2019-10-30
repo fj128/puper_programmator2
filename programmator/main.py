@@ -60,6 +60,15 @@ class Application:
         self.button_write = tk.Button(button_panel, text='Записать', command=self.cmd_write, state=tk.DISABLED)
         self.button_write.pack(side=tk.LEFT)
 
+        self.button_reset = tk.Button(button_panel, text='Сбросить', command=self.cmd_reset, state=tk.DISABLED)
+        self.button_reset.pack(side=tk.LEFT)
+
+        self.button_loadfile = tk.Button(button_panel, text='Из файла', command=self.cmd_loadfile, state=tk.DISABLED)
+        self.button_loadfile.pack(side=tk.LEFT, padx=(5, 0))
+
+        self.button_savefile = tk.Button(button_panel, text='Сохранить', command=self.cmd_savefile, state=tk.DISABLED)
+        self.button_savefile.pack(side=tk.LEFT)
+
         button_settings = tk.Button(button_panel, text='Настройки', state=tk.DISABLED)
         button_settings.pack(side=tk.RIGHT)
 
@@ -166,6 +175,18 @@ class Application:
             except Exception as exc:
                 log.error(exc)
                 raise # tkinter will print it to stdout
+
+
+    def cmd_reset(self):
+        'reset to factory settings'
+
+
+    def cmd_loadfile(self):
+        ''
+
+
+    def cmd_savefile(self):
+        ''
 
 
     def run(self):
