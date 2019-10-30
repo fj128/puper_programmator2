@@ -125,7 +125,7 @@ def send_receive_once(port: serial.Serial, msg: Message) -> Message:
     port.reset_output_buffer()
     log.debug(f'sending command: {msg.command} at {msg.address}: {pretty_hexlify(msg.data)}')
     raw = msg.compose()
-    raw += b' ' * 16 # TODO: configurable
+    # raw += b' ' * 16 # TODO: configurable
     log.debug(f'sending raw bytes: {pretty_hexlify(raw)}')
 
     port.write(raw)
