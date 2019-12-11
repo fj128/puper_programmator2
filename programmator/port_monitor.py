@@ -73,7 +73,7 @@ class PortMonitor:
         log.info(f'Connecting to {port_name!r}')
         try:
             port = serial.Serial(port_name)
-            port.timeout = 0.5
+            port.timeout = 0.3
             port.write_timeout = 0.5
             self.port = port
             log.info(f'Connected to {self.port.name!r}')

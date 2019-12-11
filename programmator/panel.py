@@ -129,13 +129,16 @@ def create_widgets(tabs):
     grid_label_and_control_mmc(ctrl)
     master_controls.append(ctrl)
 
+
     ctrl = MMC_IP_Port(page, 'ip:port 1', 142)
     grid_label_and_control_mmc(ctrl)
     master_controls.append(ctrl)
 
-    ctrl = MMC_Checkbutton(page, 'СМС на резервный телефон №1', 3, 6)
-    grid_control(ctrl)
-    master_controls.append(ctrl)
+    ctrl1 = MMC_Checkbutton(page, f'СМС на резервный телефон №1', 3, 6)
+    ctrl2 = MMC_String(page, f'Резервный телефон №1', 224, 16)
+    grid_control_and_control(page, ctrl1, ctrl2)
+    master_controls.append(ctrl1)
+    master_controls.append(ctrl2)
 
     # grid_separator(page)
 
@@ -143,9 +146,12 @@ def create_widgets(tabs):
     grid_label_and_control_mmc(ctrl)
     master_controls.append(ctrl)
 
-    ctrl = MMC_Checkbutton(page, 'СМС на резервный телефон №2', 3, 7)
-    grid_control(ctrl)
-    master_controls.append(ctrl)
+    ctrl1 = MMC_Checkbutton(page, f'СМС на резервный телефон №2', 3, 7)
+    ctrl2 = MMC_String(page, f'Резервный телефон №2', 240, 16)
+    grid_control_and_control(page, ctrl1, ctrl2)
+    master_controls.append(ctrl1)
+    master_controls.append(ctrl2)
+
 
     for it in master_controls:
         it.configure(state=tk.DISABLED)

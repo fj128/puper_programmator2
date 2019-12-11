@@ -4,7 +4,7 @@ import tkinter as tk
 import re
 
 from programmator.utils import tk_set_list_maxwidth, pretty_hexlify, timeit_block
-from programmator.comms import send_receive, Message
+from programmator.comms import send_receive, Message, ThreadController
 
 import logging
 log = logging.getLogger(__name__)
@@ -18,6 +18,7 @@ bit_memory_registry: 'Dict[int, Dict[int, MMC_Base]]' = {}
 byte_memory_registry: 'Dict[int, MMC_Base]' = {}
 
 memory_spans: List[Tuple[int, int]] = []
+total_bytes = 0
 
 # actual dynamic memory
 
@@ -54,19 +55,24 @@ def finish_initialization():
             prev = addr
     spans.append((start, prev + 1))
     memory_spans[:] = spans
+    global total_bytes
+    total_bytes = sum(end - start for start, end in memory_spans)
 
 
-def read_into_memory_map(port, callback):
+def read_into_memory_map(port, controller: ThreadController):
     memory_map.clear()
     with timeit_block('Reading device memory'):
+        read_bytes = 0
         for start, end in memory_spans:
             msg = Message(1, start, [0] * (end - start))
-            msg = send_receive(port, msg, callback)
-            if msg is None:
+            resp = send_receive(port, msg, controller)
+            if resp is None:
                 memory_map.clear()
-                return
-            for i, b in enumerate(msg.data):
+                return False
+            for i, b in enumerate(resp.data):
                 memory_map[start + i] = b
+            read_bytes += end - start
+            controller.report_progress(read_bytes, total_bytes)
         return True
 
 
@@ -83,13 +89,16 @@ def populate_memory_map_from_controls():
 
 
 
-def write_from_memory_map(port, callback):
+def write_from_memory_map(port, controller: ThreadController):
+    write_bytes = 0
     for start, end in memory_spans:
         msg = Message(0, start, [memory_map[i] for i in range(start, end)])
-        msg = send_receive(port, msg, callback)
-        if msg is None:
+        resp = send_receive(port, msg, controller)
+        if resp is None:
             memory_map.clear()
-            return
+            return False
+        write_bytes += end - start
+        controller.report_progress(write_bytes, total_bytes)
     return True
 
 

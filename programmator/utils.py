@@ -46,7 +46,7 @@ def tk_append_readonly_text(text_widget, s, max_lines=None, line_mode=False):
             text_widget.insert(tk.END, '\n')
 
     lines = int(text_widget.index(tk.END).split('.')[0])
-    if lines > max_lines:
+    if max_lines is not None and lines > max_lines:
         lines = lines - max_lines + 2 # adjust to 1-based index, exclusive
         text_widget.delete('1.0', '%d.0' % lines)
     text_widget.see(tk.END)

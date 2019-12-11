@@ -9,6 +9,8 @@ log = logging.getLogger(__name__)
 
 from programmator.utils import tk_append_readonly_text, set_high_DPI_awareness, CallbackLogHandler
 from programmator.port_monitor import PortMonitor
+from programmator.progress_window import ProgressWindow
+from programmator.comms import ThreadController
 from programmator import panel, device_memory
 
 
@@ -16,6 +18,7 @@ class Application:
     def __init__(self, root=None):
         self.buffer_line_count = 2000
         self.stopping = False
+        self.progress_window = None
 
         self.create_widgets(root)
 
@@ -34,9 +37,6 @@ class Application:
 
         self.port_monitor = PortMonitor(self.on_connection_status_changed)
         self.start_scanning_ports()
-
-        # self.receiver_thread = threading.Thread(target=self.receiver_thread_func)
-        # self.receiver_thread.start()
 
 
     def create_widgets(self, root):
@@ -110,6 +110,8 @@ class Application:
         if self.stopping:
             return
         tk_append_readonly_text(self.log_text, s, self.buffer_line_count, True)
+        if self.progress_window:
+            self.progress_window.log(s)
 
 
     def set_initial_window_position(self):
@@ -132,12 +134,15 @@ class Application:
 
     def start_polling_invoke_queue(self):
         try:
+            invoked_any = False
             while not self.invoke_queue.empty():
                 f, args, kwargs = self.invoke_queue.get(block=False)
                 f(*args, **kwargs)
+                invoked_any = True
+            # if invoked_any:
+            #     self.root.update_idletasks()
         finally:
-            # 20 ms should be enough for everyone
-            self.root.after(20, self.start_polling_invoke_queue)
+            self.root.after(50, self.start_polling_invoke_queue)
 
 
     def start_scanning_ports(self):
@@ -147,34 +152,65 @@ class Application:
             self.root.after(1000, self.start_scanning_ports)
 
 
-    def cmd_read(self):
-        if self.port_monitor.port:
+    def readwrite_in_thread(self, title, op):
+        pw = ProgressWindow(self.root, title)
+        self.progress_window = pw # for logging
+
+        def report_progress(current, total):
+            self.invoke_on_main_thread(pw.update_progress, current, total)
+
+        controller = ThreadController(report_progress)
+
+        def worker_function():
+            success = False
             try:
-                tabs = self.tabs
-                current_tab = tabs.select()
-                tabs.select(tabs.index('end') - 1)
-                if device_memory.read_into_memory_map(self.port_monitor.port, self.root.update_idletasks):
-                    device_memory.populate_controls_from_memory_map()
-                    self.button_write.configure(state=tk.NORMAL)
-                    tabs.select(current_tab)
-            except Exception as exc:
-                log.error(exc)
-                # TODO: proper exception handling
-                raise # tkinter will print it to stdout
+                success = op(self.port_monitor.port, controller)
+            except:
+                log.exception(f'{title} failed')
+            finally:
+                self.invoke_on_main_thread(pw.report_status, success)
+
+        worker = threading.Thread(target=worker_function)
+
+        def abort():
+            log.debug('Operation interrupted. Stopping worker thread')
+            controller.abort = True
+            worker.join()
+            log.debug('worker thread stopped')
+
+        pw.on_abort = abort
+
+        try:
+            worker.start()
+            if pw.run():
+                return True
+        except Exception as exc:
+            log.error(exc)
+            # TODO: proper exception handling
+            raise # tkinter will print it to stdout
+        finally:
+            self.progress_window = None
+
+
+    def cmd_read(self):
+        if not self.port_monitor.port:
+            log.error('Not connected')
+            return
+        if self.readwrite_in_thread('Считывание', device_memory.read_into_memory_map):
+            device_memory.populate_controls_from_memory_map()
+            self.button_write.configure(state=tk.NORMAL)
 
 
     def cmd_write(self):
-        if self.port_monitor.port:
-            try:
-                tabs = self.tabs
-                current_tab = tabs.select()
-                tabs.select(tabs.index('end') - 1)
-                if device_memory.populate_memory_map_from_controls():
-                    device_memory.write_from_memory_map(self.port_monitor.port, self.root.update_idletasks)
-                    tabs.select(current_tab)
-            except Exception as exc:
-                log.error(exc)
-                raise # tkinter will print it to stdout
+        if not self.port_monitor.port:
+            log.error('Not connected')
+            return
+        try:
+            if device_memory.populate_memory_map_from_controls():
+                self.readwrite_in_thread('Запись', device_memory.write_from_memory_map)
+        except Exception as exc:
+            log.error(exc)
+            raise # tkinter will print it to stdout
 
 
     def cmd_reset(self):
@@ -193,8 +229,6 @@ class Application:
         self.root.mainloop()
         self.stopping = True
         self.port_monitor.disconnect()
-        log.debug('Stopping receiver thread')
-        # self.receiver_thread.join()
 
 
 def main():

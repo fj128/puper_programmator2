@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Callable, List
 import serial
 
 from programmator.utils import pretty_hexlify
@@ -20,7 +20,7 @@ ERROR_CODES = {
 class Message:
     command: int
     address: int
-    data: bytes
+    data: List[int]
     def __repr__(self):
         return f'Message({self.command}, {self.address}, [{pretty_hexlify(self.data)}])'
 
@@ -157,14 +157,20 @@ def send_receive_once(port: serial.Serial, msg: Message) -> Message:
     raise CommunicationError(f'Устройство вернуло непонятное сообщение: {response}')
 
 
-def send_receive(port: serial.Serial, msg: Message, tk_callback=None) -> Optional[Message]:
+@dataclass
+class ThreadController:
+    report_progress: Callable # Callable[[int, int], None]  https://github.com/python/mypy/issues/5485
+    abort = False
+
+
+def send_receive(port: serial.Serial, msg: Message, controller: ThreadController) -> Optional[Message]:
     retries = 10
     for i in range(retries): # retries because currently communication is hard.
+        if controller.abort:
+            return None
         if i:
             log.warning(f'retrying {i + 1}/10')
         try:
-            if tk_callback:
-                tk_callback()
             return send_receive_once(port, msg)
         except CommunicationError as exc:
             log.error(str(exc))
