@@ -102,8 +102,6 @@ def write_from_memory_map(port, controller: ThreadController):
     return True
 
 
-
-
 # helpers
 
 def register_bit(control, address: int, bit: int):
@@ -126,6 +124,33 @@ def register_byte(control, address: int):
         other = next(iter(bits.values()))
         assert False, f'{control!r} wants to use address {address} already used by {other!r}'
     byte_memory_registry[address] = control
+
+
+def int_from_bytes(b : bytes):
+    return int.from_bytes(b, 'big')
+
+
+def int_to_bytes(i: int, length: int):
+    return i.to_bytes(length, 'big')
+
+
+def str_to_bytes(s: str, length: int):
+    b = s.encode('utf-8')
+    padding = length - len(b)
+    assert padding >= 0
+    return b + b'\0' * padding
+
+
+def bytes_to_str(val: bytes):
+    try:
+        s = val.decode('utf-8') # why not?
+    except UnicodeError:
+        log.warning(f'Инвалидные unicode символы: {val!r}')
+        s = val.decode('utf-8', errors='replace')
+    zeropos = s.find('\0')
+    if zeropos >= 0:
+        s = s[:zeropos]
+    return s
 
 
 # Base classes that deal with reading and writing memory, but not tk.
@@ -322,36 +347,13 @@ class MMC_Int(MMC_Bytes):
 
     def from_memory_map(self):
         val = self.from_memory_map_raw()
-        acc = 0
-        for v in val:
-            acc <<= 8
-            acc += v
-        self.var.set(str(acc))
+        self.var.set(str(int_from_bytes(val)))
 
 
     def to_memory_map(self):
         i = int(self.var.get())
-        val = i.to_bytes(len(self.addresses), 'big') # Yay Python!
+        val = int_to_bytes(i, len(self.addresses))
         self.to_memory_map_raw(val)
-
-
-def str_to_bytes(s: str, length: int):
-    b = s.encode('utf-8')
-    padding = length - len(b)
-    assert padding >= 0
-    return b + b'\0' * padding
-
-
-def bytes_to_str(val: bytes):
-    try:
-        s = val.decode('utf-8') # why not?
-    except UnicodeError:
-        log.warning(f'Инвалидные unicode символы: {val!r}')
-        s = val.decode('utf-8', errors='replace')
-    zeropos = s.find('\0')
-    if zeropos >= 0:
-        s = s[:zeropos]
-    return s
 
 
 @return_wrapped_control
@@ -501,3 +503,38 @@ class MMC_Time(MMC_Bytes):
         self.to_memory_map_raw([res])
 
 
+@return_wrapped_control
+class MMC_LongTimeSeconds(MMC_Bytes):
+    '''several bytes containing a number of seconds, formatted as XX:XX:XX'''
+    def __init__(self, parent, text: str, addresses: List[int]):
+        super().__init__(text, addresses)
+        self.var = tk.StringVar(parent)
+        self.control = tk.Entry(parent, textvariable=self.var)
+        self.set_default_value()
+
+
+    def set_default_value(self):
+        self.var.set('0:00')
+
+
+    def from_memory_map(self):
+        val = int_from_bytes(self.from_memory_map_raw())
+        mm, ss = divmod(val, 60)
+        hh, mm = divmod(mm, 60)
+        if hh:
+            res = f'{hh}:{mm:02}:{ss:02}'
+        else:
+            res = f'{mm}:{ss:02}'
+        self.var.set(res)
+
+
+    def to_memory_map(self):
+        s = self.var.get()
+        hms = list(map(int, s.split(':')))
+        assert len(hms) <= 3
+        while len(hms) < 3:
+            hms.insert(0, 0)
+        i = hms[0] * 3600 + hms[1] * 60 + hms[2]
+
+        val = int_to_bytes(i, len(self.addresses))
+        self.to_memory_map_raw(val)

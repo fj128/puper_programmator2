@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 
 from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
-    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_Time)
+    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_Time, MMC_LongTimeSeconds)
 
 
 def next_grid_row(parent, column=0):
@@ -14,11 +14,12 @@ def grid_control_and_control(parent, control1, control2, column=0, **kwargs):
     row = next_grid_row(parent, column)
     control1.grid(row=row, column=1 + column, sticky='nsew', padx=5, **kwargs)
     control2.grid(row=row, column=2 + column, sticky='nsew', padx=5, **kwargs)
+    return control1, control2
 
 
 def grid_label_and_control(parent, label_text: str, control, column=0, **kwargs):
     label = tk.Label(parent, text=label_text)
-    grid_control_and_control(parent, label, control, column=column, **kwargs)
+    return grid_control_and_control(parent, label, control, column=column, **kwargs)
 
 
 def grid_label_and_control_mmc(mmc_control, column=0, **kwargs):
@@ -57,21 +58,22 @@ def create_widgets(tabs):
     ctrl = MMC_BCD(page, 'Номер коммуникатора', 0, 4)
     grid_label_and_control_mmc(ctrl)
 
-    MMC_FixedByte(2)
+    for i in range(1, 8):
+        MMC_FixedBit(2, i)
 
     ctrl = MMC_Choice(page, 'Тип контрольной панели', 3, [2, 1, 0], {
         0: 'Коммуникатор',
         1: 'DALLAS',
         2: 'RING/TIP',
-        3: 'MAGELAN',
+        3: 'MAGELLAN',
         4: 'SECOLINK',
         5: 'ESPRIT',
         })
     grid_label_and_control_mmc(ctrl)
 
 
-    ctrl = MMC_Int(page, 'Период тестовой посылки (мин)', [4, 5])
-    ctrl.mmc.var.set(30) # todo - saner default
+    ctrl = MMC_LongTimeSeconds(page, 'Период тестовой посылки (чч:мм:cc)', [4, 5])
+    ctrl.mmc.var.set('30:00')
     grid_label_and_control_mmc(ctrl)
 
     ctrl = MMC_BCD(page, 'Тестовая посылка', 6, 7)
@@ -87,12 +89,12 @@ def create_widgets(tabs):
         ctrl = tk.Label(frame, text=f'APN{n}')
         ctrl.pack(side=tk.RIGHT, padx=(30, 0))
 
-        var = tk.IntVar(frame)
-        ctrl = tk.Checkbutton(frame, text=f'SIM{n}', var=var)
-        ctrl.var = var # prevents var from being garbage collected
         if n == 1:
-            var.set(1)
+            ctrl = tk.Checkbutton(frame, text=f'SIM{n}')
+            ctrl.select()
             ctrl.config(state=tk.DISABLED)
+        else:
+            ctrl = MMC_Checkbutton(frame, f'SIM{n}', 2, 0)
         ctrl.pack(side=tk.RIGHT)
 
         ctrl = MMC_String(page, f'APN{n}', apn_offset, 20)
@@ -101,37 +103,33 @@ def create_widgets(tabs):
     SIM(1, 163)
     SIM(2, 204)
 
-    grid_separator(page)
-
-    def master_code_click():
-        code = master_code.get().strip()
-        if code != '123456':
-            messagebox.showerror(title='Ошибка!', message='Неправильный код установщика. Тестовый код: 123456')
-        else:
-            for it in master_controls:
-                it.configure(state=tk.NORMAL)
-
-    row = next_grid_row(page)
-    ctrl1 = tk.Button(page, text='Ввести код установщика', command=master_code_click)
-    ctrl1.grid(row=row, column=1, padx=5)
-    master_code = tk.Entry(page)
-    master_code.grid(row=row, column=2, padx=5, sticky='nwse')
-
-    master_controls = []
-
-    grid_separator(page)
-
-    ctrl = MMC_Choice(page, 'Раппорт на IP адреса', 3, [5, 4, 3], {
+    ctrl = MMC_Choice(page, 'Рапорт на IP адреса', 3, [5, 4, 3], {
         0b100: 'IP 1',
         0b010: 'IP 2',
         0b110: 'IP1 основной/IP2 резервный',
-        0b111: 'IP 1 + IP 2'})
+        # 0b111: 'IP 1 + IP 2',
+        })
     grid_label_and_control_mmc(ctrl)
-    master_controls.append(ctrl)
 
+    grid_separator(page)
 
-    ctrl = MMC_IP_Port(page, 'ip:port 1', 142)
-    grid_label_and_control_mmc(ctrl)
+    cb_master_mode = None
+
+    def master_mode_toggle():
+        enabled = cb_master_mode.var.get()
+        for it in master_controls:
+            it.configure(state=tk.NORMAL if enabled else tk.DISABLED)
+
+    var = tk.IntVar(page)
+    ctrl = cb_master_mode = tk.Checkbutton(page, text='Режим установщика', var=var, command=master_mode_toggle)
+    ctrl.var = var
+    grid_control(ctrl, pady=(0, 15))
+
+    master_controls = []
+
+    ctrl = MMC_IP_Port(page, 'IP:port 1', 142)
+    label, _ = grid_label_and_control_mmc(ctrl)
+    master_controls.append(label)
     master_controls.append(ctrl)
 
     ctrl1 = MMC_Checkbutton(page, f'СМС на резервный телефон №1', 3, 6)
@@ -142,8 +140,9 @@ def create_widgets(tabs):
 
     # grid_separator(page)
 
-    ctrl = MMC_IP_Port(page, 'ip:port 2', 183)
-    grid_label_and_control_mmc(ctrl)
+    ctrl = MMC_IP_Port(page, 'IP:port 2', 183)
+    label, _ = grid_label_and_control_mmc(ctrl)
+    master_controls.append(label)
     master_controls.append(ctrl)
 
     ctrl1 = MMC_Checkbutton(page, f'СМС на резервный телефон №2', 3, 7)

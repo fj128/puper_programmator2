@@ -84,12 +84,13 @@ class Application:
 
         panel.create_widgets(tabs)
 
-        # tabs.add(ttk.Frame(tabs), text=' ' * 10, state=tk.DISABLED) # separator
-        tabs.add(log_page, text='-- Журнал')
+        # disable for now
+        # tabs.add(log_page, text='-- Журнал')
 
         tabs.pack(expand=True, fill=tk.BOTH)
         # tabs.select(tabs.index(tk.END) - 1)
 
+        # TODO: test on different resolutions
         # self.set_initial_window_position()
 
     def on_connection_status_changed(self, connected: bool):
@@ -207,6 +208,8 @@ class Application:
             return
         try:
             if device_memory.populate_memory_map_from_controls():
+                # read back rounded values
+                device_memory.populate_controls_from_memory_map()
                 self.readwrite_in_thread('Запись', device_memory.write_from_memory_map)
         except Exception as exc:
             log.error(exc)
