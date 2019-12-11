@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 
 from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
-    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD)
+    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_Time)
 
 
 def next_grid_row(parent, column=0):
@@ -170,47 +170,49 @@ def create_widgets(tabs):
         frame = tk.LabelFrame(container, text=f'Вход №{i + 1}')
         grid_control(frame, pady=5)
 
-        var = tk.IntVar(ctrl)
-        ctrl = tk.Checkbutton(frame, variable=var, text='Вход задействован')
+        base_addr = 12 + i * 12
+        bitmap_addr = base_addr + 3
+
+        ctrl = MMC_Checkbutton(frame, 'Вход задействован', bitmap_addr, 7)
         grid_control(ctrl, sticky='w')
 
-        ctrl = tk.Entry(frame)
-        grid_label_and_control(frame, 'Антидребезг', ctrl, column=2) # 500 ms
+        ctrl = MMC_Time(frame, 'Антидребезг', base_addr + 2)
+        grid_label_and_control_mmc(ctrl, column=2)
 
-        ctrl = tk.Entry(frame)
-        grid_label_and_control(frame, 'Задержка срабатывания', ctrl) # 0
+        ctrl = MMC_Time(frame, 'Задержка срабатывания', base_addr + 0)
+        grid_label_and_control_mmc(ctrl)
 
-        ctrl = tk.Entry(frame)
-        grid_label_and_control(frame, 'Задержка восстановления', ctrl, column=2) # 0
+        ctrl = MMC_Time(frame, 'Задержка восстановления', base_addr + 1)
+        grid_label_and_control_mmc(ctrl, column=2)
 
-        var = tk.IntVar(ctrl)
-        ctrl = tk.Checkbutton(frame, variable=var, text='SMS рассылка') # off
+        ctrl = MMC_Checkbutton(frame, 'SMS рассылка', bitmap_addr, 6)
         grid_control(ctrl, sticky='w')
 
         # Тип зоны - Только под охраной, 24х часовая
-        var = tk.IntVar(ctrl)
-        ctrl = tk.Checkbutton(frame, variable=var, text='24х часовой')
+        ctrl = MMC_Checkbutton(frame, '24х часовой', bitmap_addr, 2)
         grid_control(ctrl, column=2, sticky='w')
 
-        var = tk.IntVar(ctrl)
-        ctrl = tk.Checkbutton(frame, variable=var, text='управление PGM1') # off
+        ctrl = MMC_Checkbutton(frame, 'управление PGM1', bitmap_addr, 4)
         grid_control(ctrl, sticky='w')
 
-        var = tk.IntVar(ctrl)
-        ctrl = tk.Checkbutton(frame, variable=var, text='управление PGM2') # off
+        ctrl = MMC_Checkbutton(frame, 'управление PGM2', bitmap_addr, 5)
         grid_control(ctrl, column=2, sticky='w')
 
-        ctrl = tk.Entry(frame)
-        grid_label_and_control(frame, 'Команда срабатывания', ctrl)
+        MMC_FixedBit(bitmap_addr, 3)
+        MMC_FixedBit(bitmap_addr, 1)
+        MMC_FixedBit(bitmap_addr, 0) # NC?
 
-        ctrl = tk.Entry(frame)
-        grid_label_and_control(frame, 'Команда восстановления', ctrl, column=2)
+        ctrl = MMC_BCD(frame, 'Команда срабатывания', base_addr + 4, 3)
+        grid_label_and_control_mmc(ctrl)
 
-        ctrl = tk.Entry(frame)
-        grid_label_and_control(frame, 'Район', ctrl) # 00-99, default 00
+        ctrl = MMC_BCD(frame, 'Команда восстановления', base_addr + 6, 3)
+        grid_label_and_control_mmc(ctrl, column=2)
 
-        ctrl = tk.Entry(frame)
-        grid_label_and_control(frame, 'Пользователь', ctrl, column=2) # 000-999, 000
+        ctrl = MMC_BCD(frame, 'Район', base_addr + 8, 2) # 00-99, 00
+        grid_label_and_control_mmc(ctrl)
+
+        ctrl = MMC_BCD(frame, 'Пользователь', base_addr + 9, 3) # 000-999, 000
+        grid_label_and_control_mmc(ctrl, column=2)
 
         grid_separator(frame, False)
 
@@ -223,39 +225,40 @@ def create_widgets(tabs):
         frame = tk.LabelFrame(container, text=f'PGM{i + 1}')
         grid_control(frame, pady=5)
 
-        var = tk.IntVar(ctrl)
-        ctrl = tk.Checkbutton(frame, variable=var, text='PGM задействован')
+        base_addr = 137 if i else 132
+        bitmap_addr = base_addr + 4
+
+        ctrl = MMC_Checkbutton(frame, 'PGM задействован', bitmap_addr, 7)
         grid_control(ctrl, sticky='w')
 
+        MMC_FixedBit(bitmap_addr, 6)
+        MMC_FixedBit(bitmap_addr, 3)
+        MMC_FixedBit(bitmap_addr, 2)
+
         # Режим работы: Потенциальный Импульсный
-        var = tk.IntVar(ctrl)
-        ctrl = tk.Checkbutton(frame, variable=var, text='Импульсный')
+        ctrl = MMC_Checkbutton(frame, 'Импульсный', bitmap_addr, 1)
         grid_control(ctrl, sticky='w')
 
         # Тип выхода: Нормально разомкнут, Нормально замкнут
-        var = tk.IntVar(ctrl)
-        ctrl = tk.Checkbutton(frame, variable=var, text='Нормально разомкнут')
+        ctrl = MMC_Checkbutton(frame, 'Нормально разомкнут', bitmap_addr, 0)
         grid_control(ctrl, column=2, sticky='w')
 
         # только в импульсный режим
-        ctrl = tk.Entry(frame)
-        grid_label_and_control(frame, 'Длительность при срабатывании', ctrl)
+        ctrl = MMC_Time(frame, 'Длительность при срабатывании', base_addr + 0)
+        grid_label_and_control_mmc(ctrl)
 
-        ctrl = tk.Entry(frame)
-        grid_label_and_control(frame, 'Длительность при восстановлении', ctrl, column=2)
+        ctrl = MMC_Time(frame, 'Длительность при восстановлении', base_addr + 1)
+        grid_label_and_control_mmc(ctrl)
 
-        ctrl = tk.Entry(frame)
-        grid_label_and_control(frame, 'Длительность при постановке/снятии', ctrl)
+        ctrl = MMC_Time(frame, 'Длительность при постановке/снятии', base_addr + 2)
+        grid_label_and_control_mmc(ctrl)
 
-        # ctrl = tk.Entry(frame)
-        # grid_label_and_control(frame, 'При снятии (импульсный)', ctrl, column=2)
+        MMC_FixedByte(base_addr + 3)
 
-        var = tk.IntVar(ctrl)
-        ctrl = tk.Checkbutton(frame, variable=var, text='Программируемый через СМС')
+        ctrl = MMC_Checkbutton(frame, 'Программируемый через СМС', bitmap_addr, 5)
         grid_control(ctrl, sticky='w')
 
-        var = tk.IntVar(ctrl)
-        ctrl = tk.Checkbutton(frame, variable=var, text='Зависимый от входов')
+        ctrl = MMC_Checkbutton(frame, 'Зависимый от входов', bitmap_addr, 4)
         grid_control(ctrl, column=2, sticky='w')
 
         grid_separator(frame, False)

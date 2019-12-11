@@ -164,7 +164,7 @@ class ThreadController:
 
 
 def send_receive(port: serial.Serial, msg: Message, controller: ThreadController) -> Optional[Message]:
-    retries = 10
+    retries = 20
     for i in range(retries): # retries because currently communication is hard.
         if controller.abort:
             return None

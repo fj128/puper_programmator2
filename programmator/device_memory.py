@@ -464,3 +464,40 @@ class MMC_BCD(MMC_Bytes):
         self.to_memory_map_raw(result)
 
 
+@return_wrapped_control
+class MMC_Time(MMC_Bytes):
+    def __init__(self, parent, text: str, address: int, fine_step=0.1, fine_count=20):
+        super().__init__(text, [address])
+        self.fine_step = fine_step
+        self.fine_count = fine_count
+        self.threshold = fine_step * fine_count
+        assert self.threshold == int(self.threshold)
+        self.var = tk.StringVar(parent)
+        self.control = tk.Entry(parent, textvariable=self.var)
+        self.set_default_value()
+
+
+    def set_default_value(self):
+        self.var.set('0')
+
+
+    def from_memory_map(self):
+        [val] = self.from_memory_map_raw()
+        if val <= self.fine_count:
+            # TODO: more intelligent formatting
+            res = '{:0.1f}'.format(self.fine_step * val)
+        else:
+            res = str(int(self.threshold + val - self.fine_count))
+        self.var.set(res)
+
+
+    def to_memory_map(self):
+        # TODO: add warnings for rounding
+        x = float(self.var.get())
+        if x <= self.threshold:
+            res = round(x / self.fine_step)
+        else:
+            res = round(x - self.threshold) + self.fine_count
+        self.to_memory_map_raw([res])
+
+
