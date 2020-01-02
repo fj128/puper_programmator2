@@ -72,9 +72,16 @@ class PortMonitor:
         self.disconnect()
         log.info(f'Connecting to {port_name!r}')
         try:
-            port = serial.Serial(port_name)
-            port.timeout = 0.3
-            port.write_timeout = 0.5
+            port = serial.Serial(
+                    port_name,
+                    timeout = 0.3,
+                    write_timeout = 0.5,
+                    # Stuff below doesn't make a difference either way
+                    # xonxoff = True,
+                    # rtscts = True,
+                    # dsrdtr = True,
+            )
+
             self.port = port
             log.info(f'Connected to {self.port.name!r}')
             self._on_connection_status_changed(True)

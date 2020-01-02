@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Callable, List
+import time
 import serial
 
 from programmator.utils import pretty_hexlify
@@ -128,7 +129,12 @@ def send_receive_once(port: serial.Serial, msg: Message) -> Message:
     # raw += b' ' * 16 # TODO: configurable
     log.debug(f'sending raw bytes: {pretty_hexlify(raw)}')
 
-    port.write(raw)
+    # port.write(raw)
+    for c in raw:
+        # print(f'writing {c:02X}, {port.rts=}, {port.cts=}, {port.dtr=}, {port.dsr=}, {port.in_waiting=}, {port.out_waiting=}, ')
+        port.write([c])
+        # time.sleep(0.1)
+
     response = receive(port)
 
     log.debug(f'received command: {response.command} {response.address}: {pretty_hexlify(response.data)}')

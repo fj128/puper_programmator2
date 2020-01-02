@@ -22,7 +22,7 @@ class my_build_exe(build_exe):
 # sys.argv.extend('build bdist --format=zip'.split())
 
 setup(  name = 'puper_programmator2',
-        version = '0.0.7',
+        version = '0.0.8',
         description = 'Programmator!',
         cmdclass = {
             'build_exe': my_build_exe,
