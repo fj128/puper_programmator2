@@ -10,10 +10,10 @@ log = logging.getLogger(__name__)
 
 
 ERROR_CODES = {
-    0x31 : 'неправильная длина посылки',
-    0x32 : 'ошибка контрольной суммы',
-    0x33 : 'нет 0x0D в конце посылки',
-    0x34 : 'неизвестная команда',
+    0x31: 'неправильная длина посылки',
+    0x32: 'ошибка контрольной суммы',
+    0x33: 'нет 0x0D в конце посылки',
+    0x34: 'неизвестная команда',
 }
 
 
@@ -126,7 +126,6 @@ def send_receive_once(port: serial.Serial, msg: Message) -> Message:
     port.reset_output_buffer()
     log.debug(f'sending command: {msg.command} at {msg.address}: {pretty_hexlify(msg.data)}')
     raw = msg.compose()
-    # raw += b' ' * 16 # TODO: configurable
     log.debug(f'sending raw bytes: {pretty_hexlify(raw)}')
 
     # port.write(raw)
