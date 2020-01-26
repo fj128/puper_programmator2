@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 
 from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
-    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_Time, MMC_LongTimeSeconds)
+    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes)
 
 
 def next_grid_row(parent, column=0):
@@ -72,11 +72,11 @@ def create_widgets(tabs):
     grid_label_and_control_mmc(ctrl)
 
 
-    ctrl = MMC_LongTimeSeconds(page, 'Период тестовой посылки (чч:мм:cc)', [4, 5])
-    ctrl.mmc.var.set('30:00')
+    ctrl = MMC_LongTimeMinutes(page, 'Период тестовой посылки (минуты)', [4, 5])
+    ctrl.mmc.var.set('30')
     grid_label_and_control_mmc(ctrl)
 
-    ctrl = MMC_BCD(page, 'Тестовая посылка', 6, 7)
+    ctrl = MMC_BCD_A(page, 'Тестовая посылка', 6, 9)
     ctrl.mmc.var.set('16A2AAAAA')
     grid_label_and_control_mmc(ctrl)
 
@@ -115,19 +115,24 @@ def create_widgets(tabs):
 
     cb_master_mode = None
 
-    def master_mode_toggle():
-        enabled = cb_master_mode.var.get()
-        for it in master_controls:
-            it.configure(state=tk.NORMAL if enabled else tk.DISABLED)
+    # def master_mode_toggle():
+    #     enabled = cb_master_mode.var.get()
+    #     for it in master_controls:
+    #         it.configure(state=tk.NORMAL if enabled else tk.DISABLED)
 
-    var = tk.IntVar(page)
-    ctrl = cb_master_mode = tk.Checkbutton(page, text='Режим установщика', var=var, command=master_mode_toggle)
-    ctrl.var = var
-    grid_control(ctrl, pady=(0, 15))
+    # var = tk.IntVar(page)
+    # ctrl = cb_master_mode = tk.Checkbutton(page, text='Режим установщика', var=var, command=master_mode_toggle)
+    # ctrl.var = var
+    # grid_control(ctrl, pady=(0, 15))
 
     master_controls = []
 
     ctrl = MMC_IP_Port(page, 'IP:port 1', 142)
+    label, _ = grid_label_and_control_mmc(ctrl)
+    master_controls.append(label)
+    master_controls.append(ctrl)
+
+    ctrl = MMC_IP_Port(page, 'IP:port 2', 183)
     label, _ = grid_label_and_control_mmc(ctrl)
     master_controls.append(label)
     master_controls.append(ctrl)
@@ -138,13 +143,6 @@ def create_widgets(tabs):
     master_controls.append(ctrl1)
     master_controls.append(ctrl2)
 
-    # grid_separator(page)
-
-    ctrl = MMC_IP_Port(page, 'IP:port 2', 183)
-    label, _ = grid_label_and_control_mmc(ctrl)
-    master_controls.append(label)
-    master_controls.append(ctrl)
-
     ctrl1 = MMC_Checkbutton(page, f'СМС на резервный телефон №2', 3, 7)
     ctrl2 = MMC_String(page, f'Резервный телефон №2', 240, 16)
     grid_control_and_control(page, ctrl1, ctrl2)
@@ -152,8 +150,8 @@ def create_widgets(tabs):
     master_controls.append(ctrl2)
 
 
-    for it in master_controls:
-        it.configure(state=tk.DISABLED)
+    # for it in master_controls:
+    #     it.configure(state=tk.DISABLED)
 
     ########
 
@@ -166,13 +164,13 @@ def create_widgets(tabs):
     container = container.interior
 
     for i in range(10):
-        frame = tk.LabelFrame(container, text=f'Вход №{i + 1}')
+        frame = tk.LabelFrame(container, text=f'Вход №{i + 1}' if i != 9 else 'Разряд АКБ')
         grid_control(frame, pady=5)
 
         base_addr = 12 + i * 12
         bitmap_addr = base_addr + 3
 
-        ctrl = MMC_Checkbutton(frame, 'Вход задействован', bitmap_addr, 7)
+        ctrl = MMC_Checkbutton(frame, 'Вход задействован' if i != 9 else 'Задействован', bitmap_addr, 7)
         grid_control(ctrl, sticky='w')
 
         ctrl = MMC_Time(frame, 'Антидребезг', base_addr + 2)
@@ -199,12 +197,17 @@ def create_widgets(tabs):
 
         MMC_FixedBit(bitmap_addr, 3)
         MMC_FixedBit(bitmap_addr, 1)
-        MMC_FixedBit(bitmap_addr, 0) # NC?
 
-        ctrl = MMC_BCD(frame, 'Команда срабатывания', base_addr + 4, 3)
+        ctrl = MMC_Choice(frame, 'Уровень срабатывания', bitmap_addr, [0], {
+            0: 'Низкий',
+            1: 'Высокий',
+            })
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_BCD(frame, 'Команда восстановления', base_addr + 6, 3)
+        ctrl = MMC_BCD_A(frame, 'Команда срабатывания', base_addr + 4, 4)
+        grid_label_and_control_mmc(ctrl)
+
+        ctrl = MMC_BCD_A(frame, 'Команда восстановления', base_addr + 6, 4)
         grid_label_and_control_mmc(ctrl, column=2)
 
         ctrl = MMC_BCD(frame, 'Район', base_addr + 8, 2) # 00-99, 00
@@ -235,30 +238,43 @@ def create_widgets(tabs):
         MMC_FixedBit(bitmap_addr, 2)
 
         # Режим работы: Потенциальный Импульсный
-        ctrl = MMC_Checkbutton(frame, 'Импульсный', bitmap_addr, 1)
-        grid_control(ctrl, sticky='w')
+        # ctrl = MMC_Checkbutton(frame, 'Импульсный', bitmap_addr, 1)
+        # grid_control(ctrl, sticky='w')
 
-        # Тип выхода: Нормально разомкнут, Нормально замкнут
-        ctrl = MMC_Checkbutton(frame, 'Нормально разомкнут', bitmap_addr, 0)
-        grid_control(ctrl, column=2, sticky='w')
+        # # Тип выхода: Нормально разомкнут, Нормально замкнут
+        # ctrl = MMC_Checkbutton(frame, 'Нормально разомкнут', bitmap_addr, 0)
+        # grid_control(ctrl, column=2, sticky='w')
+
+        ctrl = MMC_Choice(frame, 'Режим работы', bitmap_addr, [1], {
+            0: 'Потенциальный',
+            1: 'Импульсный',
+            })
+        grid_label_and_control_mmc(ctrl)
+
+        ctrl = MMC_Choice(frame, 'Тип выхода', bitmap_addr, [0], {
+            0: 'Нормально замкнут',
+            1: 'Нормально разомкнут',
+            })
+        grid_label_and_control_mmc(ctrl)
 
         # только в импульсный режим
-        ctrl = MMC_Time(frame, 'Длительность при срабатывании', base_addr + 0)
+        ctrl = MMC_Time(frame, 'Длительность при постановке', base_addr + 0)
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_Time(frame, 'Длительность при восстановлении', base_addr + 1)
+        ctrl = MMC_Time(frame, 'Длительность при снятии', base_addr + 1)
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_Time(frame, 'Длительность при постановке/снятии', base_addr + 2)
+        ctrl = MMC_Time(frame, 'Длительность при срабатывании', base_addr + 2)
         grid_label_and_control_mmc(ctrl)
 
-        MMC_FixedByte(base_addr + 3)
+        ctrl = MMC_Time(frame, 'Длительность при восстановлении', base_addr + 3)
+        grid_label_and_control_mmc(ctrl)
 
         ctrl = MMC_Checkbutton(frame, 'Программируемый через СМС', bitmap_addr, 5)
         grid_control(ctrl, sticky='w')
 
         ctrl = MMC_Checkbutton(frame, 'Зависимый от входов', bitmap_addr, 4)
-        grid_control(ctrl, column=2, sticky='w')
+        grid_control(ctrl, column=1, sticky='w')
 
         grid_separator(frame, False)
 

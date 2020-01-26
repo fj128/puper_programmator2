@@ -9,30 +9,14 @@ if sys.platform == "win32":
     base = "Win32GUI"
 
 
-# I want to include my sources as an easily editable .py files
-# To that end I manually include them in setup(... 'build_exe': ) option below,
-# and also hook after the build_exe command and delete '*.pyc' files here
-class my_build_exe(build_exe):
-    def run(self):
-        super().run()
-        for f in (Path(self.build_exe)/'lib'/'programmator').glob('*.pyc'):
-            f.unlink()
-
-
-# sys.argv.extend('build bdist --format=zip'.split())
-
 setup(  name = 'puper_programmator2',
-        version = '0.0.8',
+        version = '0.0.9',
         description = 'Programmator!',
-        cmdclass = {
-            'build_exe': my_build_exe,
-        },
         options = {
             'build_exe': {
-                # put everything except our package into library.zip
+                # put everything into library.zip
                 'zip_include_packages': '*',
-                'zip_exclude_packages': ['programmator'],
-                'include_files': [('programmator', 'lib/programmator')], # add source files
+                'zip_exclude_packages': [],
             },
             'bdist_msi': {
                 # this is supposed to make the msi installer replace the previous installed version correctly

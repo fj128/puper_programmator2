@@ -129,10 +129,11 @@ def send_receive_once(port: serial.Serial, msg: Message) -> Message:
     log.debug(f'sending raw bytes: {pretty_hexlify(raw)}')
 
     # port.write(raw)
+    # there's a bug in pyserial where write ends up being incomplete (because of flow control issues
+    # with USB/serial driver as far as I understand), but serial doesn't even tell us that it wrote
+    # less bytes than expected! So writing byte by byte is really the only option currently.
     for c in raw:
-        # print(f'writing {c:02X}, {port.rts=}, {port.cts=}, {port.dtr=}, {port.dsr=}, {port.in_waiting=}, {port.out_waiting=}, ')
         port.write([c])
-        # time.sleep(0.1)
 
     response = receive(port)
 

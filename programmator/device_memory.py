@@ -1,4 +1,4 @@
-from typing import Union, List, Dict, Tuple, Sequence
+from typing import Union, List, Dict, Tuple, Sequence, Any
 import functools
 import tkinter as tk
 import re
@@ -282,6 +282,7 @@ def return_wrapped_control(cls):
         mmc = cls(*args, **kwargs)
         mmc.control.mmc = mmc
         return mmc.control
+    wrapper.cls = cls
     return wrapper
 
 
@@ -417,6 +418,8 @@ class MMC_IP_Port(MMC_Bytes):
 
 @return_wrapped_control
 class MMC_BCD(MMC_Bytes):
+    cls : Any = None # calm down mypy
+
     def __init__(self, parent, text: str, address: int, length: int):
         'Length is in _nibbles_'
         super().__init__(text, range(address, address + (length + 1) // 2))
@@ -427,7 +430,15 @@ class MMC_BCD(MMC_Bytes):
 
 
     def set_default_value(self):
-        self.var.set('0' * self.length)
+        self.var.set(''.join(self.digit_to_char(0) for _ in range(self.length)))
+
+
+    def digit_to_char(self, d):
+        return str(d)
+
+
+    def char_to_digit(self, c):
+        return int(c)
 
 
     def from_memory_map(self):
@@ -435,13 +446,13 @@ class MMC_BCD(MMC_Bytes):
         def validate_digit(digit):
             if not 0 <= digit <= 9:
                 raise Exception(f'{self}: недесятичная цифра в данных: {pretty_hexlify(val)}')
-            return digit
+            return self.digit_to_char(digit)
         result = []
         try:
             for b in val:
-                result.append(str(validate_digit(b >> 4)))
+                result.append(validate_digit(b >> 4))
                 if len(result) < self.length:
-                    result.append(str(validate_digit(b & 0x0F)))
+                    result.append(validate_digit(b & 0x0F))
                 elif b & 0x0F:
                         raise Exception(f'{self}: последний ниббл в данных должен быть нулём: {pretty_hexlify(val)}')
         except Exception as exc:
@@ -460,10 +471,24 @@ class MMC_BCD(MMC_Bytes):
         result = []
         for i, c in enumerate(s):
             if not i & 1:
-                result.append(int(c) << 4)
+                result.append(self.char_to_digit(c) << 4)
             else:
-                result[-1] |= int(c)
+                result[-1] |= self.char_to_digit(c)
         self.to_memory_map_raw(result)
+
+
+@return_wrapped_control
+class MMC_BCD_A(MMC_BCD.cls):
+    'In alert messages 0 is replaced with A'
+
+    def digit_to_char(self, d):
+        return str(d) if d else 'A'
+
+
+    def char_to_digit(self, c):
+        if c.upper() in 'A\u0410': # cyrillic A
+            return 0
+        return int(c)
 
 
 @return_wrapped_control
@@ -504,8 +529,8 @@ class MMC_Time(MMC_Bytes):
 
 
 @return_wrapped_control
-class MMC_LongTimeSeconds(MMC_Bytes):
-    '''several bytes containing a number of seconds, formatted as XX:XX:XX'''
+class MMC_LongTimeMinutes(MMC_Bytes):
+    '''several bytes containing a number of seconds, but presented with 1 minute accuracy'''
     def __init__(self, parent, text: str, addresses: List[int]):
         super().__init__(text, addresses)
         self.var = tk.StringVar(parent)
@@ -514,27 +539,17 @@ class MMC_LongTimeSeconds(MMC_Bytes):
 
 
     def set_default_value(self):
-        self.var.set('0:00')
+        self.var.set('0')
 
 
     def from_memory_map(self):
         val = int_from_bytes(self.from_memory_map_raw())
-        mm, ss = divmod(val, 60)
-        hh, mm = divmod(mm, 60)
-        if hh:
-            res = f'{hh}:{mm:02}:{ss:02}'
-        else:
-            res = f'{mm}:{ss:02}'
-        self.var.set(res)
+        mm = round(val / 60)
+        self.var.set(f'{mm}')
 
 
     def to_memory_map(self):
         s = self.var.get()
-        hms = list(map(int, s.split(':')))
-        assert len(hms) <= 3
-        while len(hms) < 3:
-            hms.insert(0, 0)
-        i = hms[0] * 3600 + hms[1] * 60 + hms[2]
-
-        val = int_to_bytes(i, len(self.addresses))
+        i = int(s)
+        val = int_to_bytes(i * 60, len(self.addresses))
         self.to_memory_map_raw(val)
