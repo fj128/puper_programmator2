@@ -493,10 +493,11 @@ class MMC_BCD_A(MMC_BCD.cls):
 
 @return_wrapped_control
 class MMC_Time(MMC_Bytes):
-    def __init__(self, parent, text: str, address: int, fine_step=0.1, fine_count=20):
+    def __init__(self, parent, text: str, address: int, fine_step=0.05, fine_count=20):
         super().__init__(text, [address])
         self.fine_step = fine_step
         self.fine_count = fine_count
+        self.decimals = 0 if not fine_count else 2
         self.threshold = fine_step * fine_count
         assert self.threshold == int(self.threshold)
         self.var = tk.StringVar(parent)
@@ -512,7 +513,7 @@ class MMC_Time(MMC_Bytes):
         [val] = self.from_memory_map_raw()
         if val <= self.fine_count:
             # TODO: more intelligent formatting
-            res = '{:0.1f}'.format(self.fine_step * val)
+            res = '{:0.{decimals}f}'.format(self.fine_step * val, decimals=self.decimals)
         else:
             res = str(int(self.threshold + val - self.fine_count))
         self.var.set(res)

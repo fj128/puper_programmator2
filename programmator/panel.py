@@ -6,14 +6,22 @@ from programmator.device_memory import (finish_initialization, MMC_Checkbutton, 
     MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes)
 
 
+def revupdate_kwargs(extra_kwargs: dict, **kwargs):
+    'Update the dict of kwargs given explicitly with the first argument, overriding duplicate values'
+    kwargs.update(extra_kwargs)
+    return kwargs
+
+
 def next_grid_row(parent, column=0):
     return parent.grid_size()[1] - bool(column)
 
 
-def grid_control_and_control(parent, control1, control2, column=0, **kwargs):
+def grid_control_and_control(parent, control1, control2, column=0, kwargs={}, kwargs1={}, kwargs2={}):
     row = next_grid_row(parent, column)
-    control1.grid(row=row, column=1 + column, sticky='nsew', padx=5, **kwargs)
-    control2.grid(row=row, column=2 + column, sticky='nsew', padx=5, **kwargs)
+    kwargs1 = revupdate_kwargs(kwargs1, **kwargs)
+    kwargs2 = revupdate_kwargs(kwargs2, **kwargs)
+    control1.grid(revupdate_kwargs(kwargs1, row=row, column=1 + column, sticky='nsew', padx=5))
+    control2.grid(revupdate_kwargs(kwargs2, row=row, column=2 + column, sticky='nsew', padx=5))
     return control1, control2
 
 
@@ -30,7 +38,7 @@ def grid_label_and_control_mmc(mmc_control, column=0, **kwargs):
 
 def grid_control(control, column=0, **kwargs):
     row = next_grid_row(control.master, column)
-    control.grid(row=row, column=1 + column, columnspan=2, padx=5, **kwargs)
+    control.grid(revupdate_kwargs(kwargs, row=row, column=1 + column, columnspan=2, padx=5))
 
 
 def grid_separator(parent, visible=True, columnspan=2):
@@ -103,13 +111,13 @@ def create_widgets(tabs):
     SIM(1, 163)
     SIM(2, 204)
 
-    ctrl = MMC_Choice(page, 'Рапорт на IP адреса', 3, [5, 4, 3], {
-        0b100: 'IP 1',
-        0b010: 'IP 2',
-        0b110: 'IP1 основной/IP2 резервный',
-        # 0b111: 'IP 1 + IP 2',
-        })
-    grid_label_and_control_mmc(ctrl)
+    # ctrl = MMC_Choice(page, 'Рапорт на IP адреса', 3, [5, 4, 3], {
+    #     0b100: 'IP 1',
+    #     0b010: 'IP 2',
+    #     0b110: 'IP1 основной/IP2 резервный',
+    #     # 0b111: 'IP 1 + IP 2',
+    #     })
+    # grid_label_and_control_mmc(ctrl)
 
     grid_separator(page)
 
@@ -127,24 +135,28 @@ def create_widgets(tabs):
 
     master_controls = []
 
-    ctrl = MMC_IP_Port(page, 'IP:port 1', 142)
-    label, _ = grid_label_and_control_mmc(ctrl)
-    master_controls.append(label)
-    master_controls.append(ctrl)
+    name = 'Основной IP:port'
+    ctrl1 = tk.Checkbutton(page, text=name)
+    ctrl1.select()
+    ctrl1.configure(state=tk.DISABLED)
+    ctrl2 = MMC_IP_Port(page, name, 142)
+    grid_control_and_control(page, ctrl1, ctrl2, kwargs1=dict(sticky='w'))
 
-    ctrl = MMC_IP_Port(page, 'IP:port 2', 183)
-    label, _ = grid_label_and_control_mmc(ctrl)
-    master_controls.append(label)
-    master_controls.append(ctrl)
+    MMC_FixedBit(3, 5, 1)
+    MMC_FixedBit(3, 3)
+    name = 'Резервный IP:port'
+    ctrl1 = MMC_Checkbutton(page, name, 3, 4)
+    ctrl2 = MMC_IP_Port(page, name, 183)
+    grid_control_and_control(page, ctrl1, ctrl2, kwargs1=dict(sticky='w'))
 
-    ctrl1 = MMC_Checkbutton(page, f'СМС на резервный телефон №1', 3, 6)
-    ctrl2 = MMC_String(page, f'Резервный телефон №1', 224, 16)
+    ctrl1 = MMC_Checkbutton(page, 'СМС на резервный телефон SIM1', 3, 6)
+    ctrl2 = MMC_String(page, 'Резервный телефон №1', 224, 16)
     grid_control_and_control(page, ctrl1, ctrl2)
     master_controls.append(ctrl1)
     master_controls.append(ctrl2)
 
-    ctrl1 = MMC_Checkbutton(page, f'СМС на резервный телефон №2', 3, 7)
-    ctrl2 = MMC_String(page, f'Резервный телефон №2', 240, 16)
+    ctrl1 = MMC_Checkbutton(page, 'СМС на резервный телефон SIM2', 3, 7)
+    ctrl2 = MMC_String(page, 'Резервный телефон №2', 240, 16)
     grid_control_and_control(page, ctrl1, ctrl2)
     master_controls.append(ctrl1)
     master_controls.append(ctrl2)
@@ -173,13 +185,13 @@ def create_widgets(tabs):
         ctrl = MMC_Checkbutton(frame, 'Вход задействован' if i != 9 else 'Задействован', bitmap_addr, 7)
         grid_control(ctrl, sticky='w')
 
-        ctrl = MMC_Time(frame, 'Антидребезг', base_addr + 2)
+        ctrl = MMC_Time(frame, 'Антидребезг', base_addr + 2, fine_count=300)
         grid_label_and_control_mmc(ctrl, column=2)
 
-        ctrl = MMC_Time(frame, 'Задержка срабатывания', base_addr + 0)
+        ctrl = MMC_Time(frame, 'Задержка срабатывания', base_addr + 0, fine_count=0)
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_Time(frame, 'Задержка восстановления', base_addr + 1)
+        ctrl = MMC_Time(frame, 'Задержка восстановления', base_addr + 1, fine_count=0)
         grid_label_and_control_mmc(ctrl, column=2)
 
         ctrl = MMC_Checkbutton(frame, 'SMS рассылка', bitmap_addr, 6)
@@ -282,7 +294,7 @@ def create_widgets(tabs):
     # "обязательно ввести международный код страны" (красным)
     for i in range(10):
         ctrl = tk.Entry(page)
-        grid_label_and_control(page, f'Телефон №{i + 1}', ctrl, pady=5)
+        grid_label_and_control(page, f'Телефон №{i + 1}', ctrl, kwargs=dict(pady=5))
 
     page = add_tab('СМС управление', 'Белый список телефонов с правами управления')
     container = tk.Frame(page)
@@ -320,12 +332,12 @@ def create_widgets(tabs):
     page = add_tab('Коды доступа', 'Коды доступа DALLAS/карточки')
     for i in range(16):
         ctrl = tk.Entry(page)
-        grid_label_and_control(page, f'Код доступа №{i + 1}', ctrl, pady=5)
+        grid_label_and_control(page, f'Код доступа №{i + 1}', ctrl, kwargs=dict(pady=5))
 
     page = add_tab('Сообщения', 'Текстовые сообщения пользователя')
     for i in range(16):
         ctrl = tk.Entry(page)
-        grid_label_and_control(page, f'Сообщение №{i + 1}', ctrl, pady=5)
+        grid_label_and_control(page, f'Сообщение №{i + 1}', ctrl, kwargs=dict(pady=5))
 
     # page = add_tab('X-Ссылки?')
 
