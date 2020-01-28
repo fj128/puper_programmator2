@@ -10,7 +10,7 @@ if sys.platform == "win32":
 
 
 setup(  name = 'puper_programmator2',
-        version = '0.0.10',
+        version = '0.0.11',
         description = 'Programmator!',
         options = {
             'build_exe': {

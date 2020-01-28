@@ -47,6 +47,15 @@ def grid_separator(parent, visible=True, columnspan=2):
     separator.grid(row=row, column=1, columnspan=columnspan, pady=5, padx=0, sticky='nsew')
 
 
+def recursively_set_state(widget, state):
+    try:
+        widget.configure(state=state)
+    except tk.TclError:
+        pass
+    for w in widget.winfo_children():
+        recursively_set_state(w, state)
+
+
 def create_widgets(tabs):
     def add_tab(name: str, header=''):
         page = ttk.Frame(tabs)
@@ -149,14 +158,16 @@ def create_widgets(tabs):
     ctrl2 = MMC_IP_Port(page, name, 183)
     grid_control_and_control(page, ctrl1, ctrl2, kwargs1=dict(sticky='w'))
 
-    ctrl1 = MMC_Checkbutton(page, 'СМС на резервный телефон SIM1', 3, 6)
-    ctrl2 = MMC_String(page, 'Резервный телефон №1', 224, 16)
+    name = 'Телефон резервного СМС канала SIM1'
+    ctrl1 = MMC_Checkbutton(page, name, 3, 6)
+    ctrl2 = MMC_String(page, name, 224, 16)
     grid_control_and_control(page, ctrl1, ctrl2)
     master_controls.append(ctrl1)
     master_controls.append(ctrl2)
 
-    ctrl1 = MMC_Checkbutton(page, 'СМС на резервный телефон SIM2', 3, 7)
-    ctrl2 = MMC_String(page, 'Резервный телефон №2', 240, 16)
+    name = 'Телефон резервного СМС канала SIM2'
+    ctrl1 = MMC_Checkbutton(page, name, 3, 7)
+    ctrl2 = MMC_String(page, name, 240, 16)
     grid_control_and_control(page, ctrl1, ctrl2)
     master_controls.append(ctrl1)
     master_controls.append(ctrl2)
@@ -185,13 +196,13 @@ def create_widgets(tabs):
         ctrl = MMC_Checkbutton(frame, 'Вход задействован' if i != 9 else 'Задействован', bitmap_addr, 7)
         grid_control(ctrl, sticky='w')
 
-        ctrl = MMC_Time(frame, 'Антидребезг', base_addr + 2, fine_count=300)
+        ctrl = MMC_Time(frame, 'Антидребезг (сек)', base_addr + 2, fine_count=300)
         grid_label_and_control_mmc(ctrl, column=2)
 
-        ctrl = MMC_Time(frame, 'Задержка срабатывания', base_addr + 0, fine_count=0)
+        ctrl = MMC_Time(frame, 'Задержка срабатывания (сек)', base_addr + 0, fine_count=0, max_byte_value=127)
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_Time(frame, 'Задержка восстановления', base_addr + 1, fine_count=0)
+        ctrl = MMC_Time(frame, 'Задержка восстановления (сек)', base_addr + 1, fine_count=0, max_byte_value=127)
         grid_label_and_control_mmc(ctrl, column=2)
 
         ctrl = MMC_Checkbutton(frame, 'SMS рассылка', bitmap_addr, 6)
@@ -270,16 +281,16 @@ def create_widgets(tabs):
         grid_label_and_control_mmc(ctrl)
 
         # только в импульсный режим
-        ctrl = MMC_Time(frame, 'Длительность при постановке', base_addr + 0)
+        ctrl = MMC_Time(frame, 'Длительность при постановке (сек)', base_addr + 0)
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_Time(frame, 'Длительность при снятии', base_addr + 1)
+        ctrl = MMC_Time(frame, 'Длительность при снятии (сек)', base_addr + 1)
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_Time(frame, 'Длительность при срабатывании', base_addr + 2)
+        ctrl = MMC_Time(frame, 'Длительность при срабатывании (сек)', base_addr + 2)
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_Time(frame, 'Длительность при восстановлении', base_addr + 3)
+        ctrl = MMC_Time(frame, 'Длительность при восстановлении (сек)', base_addr + 3)
         grid_label_and_control_mmc(ctrl)
 
         ctrl = MMC_Checkbutton(frame, 'Программируемый через СМС', bitmap_addr, 5)
@@ -295,6 +306,8 @@ def create_widgets(tabs):
     for i in range(10):
         ctrl = tk.Entry(page)
         grid_label_and_control(page, f'Телефон №{i + 1}', ctrl, kwargs=dict(pady=5))
+
+    recursively_set_state(page, tk.DISABLED)
 
     page = add_tab('СМС управление', 'Белый список телефонов с правами управления')
     container = tk.Frame(page)
@@ -320,24 +333,24 @@ def create_widgets(tabs):
         grid_control(ctrl, column=2)
 
         var = tk.IntVar(frame)
-        ctrl = tk.Checkbutton(frame, variable=var, text='Arm/disarm')
+        ctrl = tk.Checkbutton(frame, variable=var, text='Постановка/Снятие')
         grid_control(ctrl, column=4)
-
-        var = tk.IntVar(frame)
-        ctrl = tk.Checkbutton(frame, variable=var, text='Смена PIN')
-        grid_control(ctrl, column=6)
 
         grid_separator(container, columnspan=4)
 
-    page = add_tab('Коды доступа', 'Коды доступа DALLAS/карточки')
-    for i in range(16):
-        ctrl = tk.Entry(page)
-        grid_label_and_control(page, f'Код доступа №{i + 1}', ctrl, kwargs=dict(pady=5))
+    recursively_set_state(page, tk.DISABLED)
+
+    # page = add_tab('Коды доступа', 'Коды доступа DALLAS/карточки')
+    # for i in range(16):
+    #     ctrl = tk.Entry(page)
+    #     grid_label_and_control(page, f'Код доступа №{i + 1}', ctrl, kwargs=dict(pady=5))
 
     page = add_tab('Сообщения', 'Текстовые сообщения пользователя')
     for i in range(16):
         ctrl = tk.Entry(page)
         grid_label_and_control(page, f'Сообщение №{i + 1}', ctrl, kwargs=dict(pady=5))
+
+    recursively_set_state(page, tk.DISABLED)
 
     # page = add_tab('X-Ссылки?')
 

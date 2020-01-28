@@ -493,10 +493,12 @@ class MMC_BCD_A(MMC_BCD.cls):
 
 @return_wrapped_control
 class MMC_Time(MMC_Bytes):
-    def __init__(self, parent, text: str, address: int, fine_step=0.05, fine_count=20):
+    def __init__(self, parent, text: str, address: int, max_byte_value=255, fine_step=0.05, fine_count=20):
         super().__init__(text, [address])
+        self.max_byte_value = max_byte_value
         self.fine_step = fine_step
         self.fine_count = fine_count
+
         self.decimals = 0 if not fine_count else 2
         self.threshold = fine_step * fine_count
         assert self.threshold == int(self.threshold)
@@ -506,7 +508,8 @@ class MMC_Time(MMC_Bytes):
 
 
     def set_default_value(self):
-        self.var.set('0')
+        # TODO: refactor formatting from to/from_memory_map.
+        self.var.set('{:0.{decimals}f}'.format(0, decimals=self.decimals))
 
 
     def from_memory_map(self):
@@ -526,6 +529,8 @@ class MMC_Time(MMC_Bytes):
             res = round(x / self.fine_step)
         else:
             res = round(x - self.threshold) + self.fine_count
+        if res > self.max_byte_value:
+            res = self.max_byte_value
         self.to_memory_map_raw([res])
 
 
