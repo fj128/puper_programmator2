@@ -3,7 +3,8 @@ from tkinter import ttk, messagebox
 
 from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
-    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes)
+    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes,
+    MMC_Phone)
 
 
 def revupdate_kwargs(extra_kwargs: dict, **kwargs):
@@ -160,14 +161,14 @@ def create_widgets(tabs):
 
     name = 'Телефон резервного СМС канала SIM1'
     ctrl1 = MMC_Checkbutton(page, name, 3, 6)
-    ctrl2 = MMC_String(page, name, 224, 16)
+    ctrl2 = MMC_Phone(page, name, 224, 16)
     grid_control_and_control(page, ctrl1, ctrl2)
     master_controls.append(ctrl1)
     master_controls.append(ctrl2)
 
     name = 'Телефон резервного СМС канала SIM2'
     ctrl1 = MMC_Checkbutton(page, name, 3, 7)
-    ctrl2 = MMC_String(page, name, 240, 16)
+    ctrl2 = MMC_Phone(page, name, 240, 16)
     grid_control_and_control(page, ctrl1, ctrl2)
     master_controls.append(ctrl1)
     master_controls.append(ctrl2)
@@ -301,14 +302,6 @@ def create_widgets(tabs):
 
         grid_separator(frame, False)
 
-    page = add_tab('СМС рассылка', 'Список телефонов пользователей для рассылки СМС')
-    # "обязательно ввести международный код страны" (красным)
-    for i in range(10):
-        ctrl = tk.Entry(page)
-        grid_label_and_control(page, f'Телефон №{i + 1}', ctrl, kwargs=dict(pady=5))
-
-    recursively_set_state(page, tk.DISABLED)
-
     page = add_tab('СМС управление', 'Белый список телефонов с правами управления')
     container = tk.Frame(page)
     grid_control(container)
@@ -337,6 +330,14 @@ def create_widgets(tabs):
         grid_control(ctrl, column=4)
 
         grid_separator(container, columnspan=4)
+
+    recursively_set_state(page, tk.DISABLED)
+
+    page = add_tab('СМС рассылка', 'Список телефонов пользователей для рассылки СМС')
+    # "обязательно ввести международный код страны" (красным)
+    for i in range(10):
+        ctrl = tk.Entry(page)
+        grid_label_and_control(page, f'Телефон №{i + 1}', ctrl, kwargs=dict(pady=5))
 
     recursively_set_state(page, tk.DISABLED)
 

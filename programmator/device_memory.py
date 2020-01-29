@@ -559,3 +559,51 @@ class MMC_LongTimeMinutes(MMC_Bytes):
         i = int(s)
         val = int_to_bytes(i * 60, len(self.addresses))
         self.to_memory_map_raw(val)
+
+
+@return_wrapped_control
+class MMC_Phone(MMC_Bytes):
+    def __init__(self, parent, text: str, address: int, length: int):
+        # TODO: check if the device considers zero terminator optional?
+        super().__init__(text, range(address, address + length))
+
+        # def validate(s):
+        #     return s.startswith('+')
+        # vcmd = (self.control.register(validate), '%P')
+        # self.entry = tk.Entry(self.control, textvariable=self.var, validate='key', validatecommand=vcmd)
+
+        self.control = tk.Frame(parent)
+
+        self.varplus = tk.StringVar(parent)
+        self.plus = tk.Entry(self.control, textvariable=self.varplus, width=1, relief=tk.FLAT, state=tk.DISABLED)
+        self.plus.configure(disabledforeground=self.plus.cget('foreground'))
+        self.plus.pack(side=tk.LEFT, expand=True, fill='y')
+        self.varplus.set('+')
+
+        self.var = tk.StringVar(parent)
+        self.entry = tk.Entry(self.control, textvariable=self.var)
+        self.entry.pack(side=tk.LEFT, expand=True, fill='both')
+
+        self.set_default_value()
+
+
+    def set_default_value(self):
+        self.var.set('')
+
+
+    def from_memory_map(self):
+        val = self.from_memory_map_raw()
+        self.var.set(bytes_to_str(val))
+
+
+    def to_memory_map(self):
+        s = self.var.get()
+        b = str_to_bytes(s, len(self.addresses))
+        self.to_memory_map_raw(b)
+
+
+
+
+if __name__ == '__main__':
+    from programmator.main import main
+    main()
