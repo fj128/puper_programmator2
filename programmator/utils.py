@@ -12,6 +12,13 @@ def pretty_hexlify(data):
     return ' '.join(f'{b:02X}' for b in data)
 
 
+def enumerate_first_last(lst):
+    'Use like `for is_first, is_last, it in enumerate_first_last(lst):`'
+    last = len(lst) - 1
+    for i, it in enumerate(lst):
+        yield i == 0, i == last, it
+
+
 @contextmanager
 def timeit_block(what='Something'):
     import timeit

@@ -1,10 +1,11 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+from tkinter.font import Font
 
-from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth
+from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth, enumerate_first_last
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
     MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes,
-    MMC_Phone)
+    MMC_Phone, make_zero_bits)
 
 
 def revupdate_kwargs(extra_kwargs: dict, **kwargs):
@@ -66,8 +67,13 @@ def create_widgets(tabs):
         page.columnconfigure(3, weight=1)
 
         if header:
-            ctrl = tk.Label(page, text=header)
-            grid_control(ctrl, pady=7)
+            for is_first, is_last, line in enumerate_first_last(header.split('\n')):
+                ctrl = tk.Label(page, text=line)
+                # increase font size somewhat
+                font = Font(font=ctrl['font'])
+                font.configure(size=font['size'] + 2)
+                ctrl.configure(font=font)
+                grid_control(ctrl, pady=(10 if is_first else 0, 10 if is_last else 0))
             grid_separator(page)
         return page
 
@@ -76,8 +82,7 @@ def create_widgets(tabs):
     ctrl = MMC_BCD(page, 'Номер коммуникатора', 0, 4)
     grid_label_and_control_mmc(ctrl)
 
-    for i in range(1, 8):
-        MMC_FixedBit(2, i)
+    make_zero_bits(2, range(1, 8))
 
     ctrl = MMC_Choice(page, 'Тип контрольной панели', 3, [2, 1, 0], {
         0: 'Коммуникатор',
@@ -257,9 +262,7 @@ def create_widgets(tabs):
         ctrl = MMC_Checkbutton(frame, 'PGM задействован', bitmap_addr, 7)
         grid_control(ctrl, sticky='w')
 
-        MMC_FixedBit(bitmap_addr, 6)
-        MMC_FixedBit(bitmap_addr, 3)
-        MMC_FixedBit(bitmap_addr, 2)
+        make_zero_bits(bitmap_addr, [6, 3, 2])
 
         # Режим работы: Потенциальный Импульсный
         # ctrl = MMC_Checkbutton(frame, 'Импульсный', bitmap_addr, 1)
@@ -302,36 +305,39 @@ def create_widgets(tabs):
 
         grid_separator(frame, False)
 
-    page = add_tab('СМС управление', 'Белый список телефонов с правами управления')
+    page = add_tab('СМС управление', 'Белый список телефонов с правами управления' +
+            '\n(последние 8 цифр номера)')
     container = tk.Frame(page)
     grid_control(container)
 
     for i in range(10):
         row = next_grid_row(container, 0)
-        ctrl = tk.Entry(container)
-        grid_label_and_control(container, f'Телефон №{i + 1}', ctrl)
+        base_addr = 384 + i * 8
 
-        ctrl = tk.Entry(container)
-        grid_label_and_control(container, f'PIN', ctrl) # 0000
+        MMC_FixedByte(base_addr + 0) # CLS
+
+        ctrl = MMC_BCD(container, f'Телефон №{i + 1}', base_addr + 1, 8)
+        grid_label_and_control_mmc(ctrl)
+
+        ctrl = MMC_BCD(container, f'PIN', base_addr + 6, 4)
+        grid_label_and_control_mmc(ctrl)
 
         frame = tk.LabelFrame(container, text='Права')
         frame.grid(row=row, column=3, rowspan=2, columnspan=2)
 
-        var = tk.IntVar(frame)
-        ctrl = tk.Checkbutton(frame, variable=var, text='PGM1')
+        bitmap_addr = base_addr + 5
+        make_zero_bits(bitmap_addr, [7, 6, 5, 4, 0])
+
+        ctrl = MMC_Checkbutton(frame, 'PGM1', bitmap_addr, 2)
         grid_control(ctrl)
 
-        var = tk.IntVar(frame)
-        ctrl = tk.Checkbutton(frame, variable=var, text='PGM2')
+        ctrl = MMC_Checkbutton(frame, 'PGM2', bitmap_addr, 3)
         grid_control(ctrl, column=2)
 
-        var = tk.IntVar(frame)
-        ctrl = tk.Checkbutton(frame, variable=var, text='Постановка/Снятие')
+        ctrl = MMC_Checkbutton(frame, 'Постановка/Снятие', bitmap_addr, 1)
         grid_control(ctrl, column=4)
 
         grid_separator(container, columnspan=4)
-
-    recursively_set_state(page, tk.DISABLED)
 
     page = add_tab('СМС рассылка', 'Список телефонов пользователей для рассылки СМС')
     # "обязательно ввести международный код страны" (красным)

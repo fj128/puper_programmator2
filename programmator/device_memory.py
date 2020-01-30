@@ -1,4 +1,4 @@
-from typing import Union, List, Dict, Tuple, Sequence, Any
+from typing import Union, List, Dict, Tuple, Sequence, Any, Iterable
 import functools
 import tkinter as tk
 import re
@@ -257,6 +257,10 @@ class MMC_FixedBit(MMC_Bits):
         self.to_memory_map_raw(self.value)
 
 
+def make_zero_bits(address: int, bits: Iterable[int]):
+    return [MMC_FixedBit(address, bit) for bit in bits]
+
+
 class MMC_FixedByte(MMC_Bytes):
     def __init__(self, address: int, value=0):
         super().__init__('', [address])
@@ -276,7 +280,8 @@ class MMC_FixedByte(MMC_Bytes):
 # Actual controls
 
 def return_wrapped_control(cls):
-    'In 99% of the cases we want to get the resulting tk control instead of the MMC itself'
+    '''In 99% of the cases we want to get the resulting tk control instead of the MMC itself.
+    This makes mypy very confused about inheritance unfortunately, but what you gonna do'''
     @functools.wraps(cls.__init__)
     def wrapper(*args, **kwargs):
         mmc = cls(*args, **kwargs)
@@ -515,10 +520,10 @@ class MMC_Time(MMC_Bytes):
     def from_memory_map(self):
         [val] = self.from_memory_map_raw()
         if val <= self.fine_count:
-            # TODO: more intelligent formatting
-            res = '{:0.{decimals}f}'.format(self.fine_step * val, decimals=self.decimals)
+            res_f = self.fine_step * val
         else:
-            res = str(int(self.threshold + val - self.fine_count))
+            res_f = int(self.threshold + val - self.fine_count)
+        res = '{:0.{decimals}f}'.format(res_f, decimals=self.decimals)
         self.var.set(res)
 
 
