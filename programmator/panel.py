@@ -193,7 +193,13 @@ def create_widgets(tabs):
     container = container.interior
 
     for i in range(10):
-        frame = tk.LabelFrame(container, text=f'Вход №{i + 1}' if i != 9 else 'Разряд АКБ')
+        is_input_nine = (i == 8)
+        is_input_ten = (i == 9)
+
+        frame = tk.LabelFrame(container, text=(
+            'Вход №9. Постановка/Снятие.' if is_input_nine else
+            'Разряд АКБ' if is_input_ten else
+            f'Вход №{i + 1}'))
         grid_control(frame, pady=5)
 
         base_addr = 12 + i * 12
@@ -214,9 +220,12 @@ def create_widgets(tabs):
         ctrl = MMC_Checkbutton(frame, 'SMS рассылка', bitmap_addr, 6)
         grid_control(ctrl, sticky='w')
 
-        # Тип зоны - Только под охраной, 24х часовая
-        ctrl = MMC_Checkbutton(frame, '24х часовой', bitmap_addr, 2)
-        grid_control(ctrl, column=2, sticky='w')
+        if not is_input_nine:
+            # Тип зоны - Только под охраной, 24х часовая
+            ctrl = MMC_Checkbutton(frame, '24-х часовой', bitmap_addr, 2)
+            grid_control(ctrl, column=2, sticky='w')
+        else:
+            MMC_FixedBit(bitmap_addr, 2)
 
         ctrl = MMC_Checkbutton(frame, 'управление PGM1', bitmap_addr, 4)
         grid_control(ctrl, sticky='w')
@@ -227,16 +236,19 @@ def create_widgets(tabs):
         MMC_FixedBit(bitmap_addr, 3)
         MMC_FixedBit(bitmap_addr, 1)
 
-        ctrl = MMC_Choice(frame, 'Уровень срабатывания', bitmap_addr, [0], {
-            0: 'Низкий',
-            1: 'Высокий',
-            })
+        if not is_input_nine:
+            ctrl = MMC_Choice(frame, 'Уровень срабатывания', bitmap_addr, [0], {
+                0: 'Низкий',
+                1: 'Высокий',
+                })
+            grid_label_and_control_mmc(ctrl)
+        else:
+            MMC_FixedBit(bitmap_addr, 0)
+
+        ctrl = MMC_BCD_A(frame, 'Команда срабатывания' if not is_input_nine else 'Команда постановки', base_addr + 4, 4)
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_BCD_A(frame, 'Команда срабатывания', base_addr + 4, 4)
-        grid_label_and_control_mmc(ctrl)
-
-        ctrl = MMC_BCD_A(frame, 'Команда восстановления', base_addr + 6, 4)
+        ctrl = MMC_BCD_A(frame, 'Команда восстановления' if not is_nine else 'Команда снятия', base_addr + 6, 4)
         grid_label_and_control_mmc(ctrl, column=2)
 
         ctrl = MMC_BCD(frame, 'Район', base_addr + 8, 2) # 00-99, 00
