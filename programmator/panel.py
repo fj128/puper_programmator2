@@ -197,7 +197,7 @@ def create_widgets(tabs):
         is_input_ten = (i == 9)
 
         frame = tk.LabelFrame(container, text=(
-            'Вход №9. Постановка/Снятие.' if is_input_nine else
+            'Вход №9. Постановка/Снятие' if is_input_nine else
             'Разряд АКБ' if is_input_ten else
             f'Вход №{i + 1}'))
         grid_control(frame, pady=5)
@@ -248,7 +248,7 @@ def create_widgets(tabs):
         ctrl = MMC_BCD_A(frame, 'Команда срабатывания' if not is_input_nine else 'Команда постановки', base_addr + 4, 4)
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_BCD_A(frame, 'Команда восстановления' if not is_nine else 'Команда снятия', base_addr + 6, 4)
+        ctrl = MMC_BCD_A(frame, 'Команда восстановления' if not is_input_nine else 'Команда снятия', base_addr + 6, 4)
         grid_label_and_control_mmc(ctrl, column=2)
 
         ctrl = MMC_BCD(frame, 'Район', base_addr + 8, 2) # 00-99, 00
