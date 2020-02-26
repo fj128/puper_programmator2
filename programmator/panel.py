@@ -7,6 +7,9 @@ from programmator.device_memory import (finish_initialization, MMC_Checkbutton, 
     MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes,
     MMC_Phone, make_zero_bits)
 
+import logging
+log = logging.getLogger(__name__)
+
 
 def revupdate_kwargs(extra_kwargs: dict, **kwargs):
     'Update the dict of kwargs given explicitly with the first argument, overriding duplicate values'
@@ -59,6 +62,12 @@ def recursively_set_state(widget, state):
 
 
 def create_widgets(tabs):
+    # placeholder pseudo-controls
+    # mmc_version = MMC_Int(tabs, 'version', [1008, 1009]).mmc
+    # mmc_pin = MMC_BCD(tabs, 'PIN', 1014, 6).mmc # 3 bytes instead of specced 6.
+    # log.info(f'version={mmc_version.var.get()}')
+    # log.debug(f'pin={mmc_pin.var.get()}')
+
     def add_tab(name: str, header=''):
         page = ttk.Frame(tabs)
 
@@ -157,10 +166,10 @@ def create_widgets(tabs):
     ctrl2 = MMC_IP_Port(page, name, 142)
     grid_control_and_control(page, ctrl1, ctrl2, kwargs1=dict(sticky='w'))
 
-    MMC_FixedBit(3, 5, 1)
     MMC_FixedBit(3, 3)
+    MMC_FixedBit(3, 4, 1)
     name = 'Резервный IP:port'
-    ctrl1 = MMC_Checkbutton(page, name, 3, 4)
+    ctrl1 = MMC_Checkbutton(page, name, 3, 5)
     ctrl2 = MMC_IP_Port(page, name, 183)
     grid_control_and_control(page, ctrl1, ctrl2, kwargs1=dict(sticky='w'))
 
