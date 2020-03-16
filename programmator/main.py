@@ -72,6 +72,9 @@ class Application:
         button_settings = tk.Button(button_panel, text='Настройки', state=tk.DISABLED)
         button_settings.pack(side=tk.RIGHT)
 
+        # button_emergency_unbrick = tk.Button(button_panel, text='Emergency Unbrick Write', command=self.cmd_unbrick)
+        # button_emergency_unbrick.pack(side=tk.RIGHT)
+
         separator = tk.Frame(frame, height=3, bd=1) #, relief=tk.SUNKEN
         separator.pack(fill=tk.X)
 
@@ -226,6 +229,10 @@ class Application:
 
     def cmd_savefile(self):
         ''
+
+
+    def cmd_unbrick(self):
+        self.cmd_write()
 
 
     def run(self):

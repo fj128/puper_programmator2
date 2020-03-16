@@ -242,7 +242,7 @@ class MMC_Bytes(MMC_Base):
 # Pseudo-controls for constant values
 
 class MMC_FixedBit(MMC_Bits):
-    def __init__(self, address: int, bit: int, value=0):
+    def __init__(self, address: int, bit: int, value=1):
         super().__init__('', address, [bit])
         self.value = value
 
@@ -257,12 +257,12 @@ class MMC_FixedBit(MMC_Bits):
         self.to_memory_map_raw(self.value)
 
 
-def make_zero_bits(address: int, bits: Iterable[int]):
+def make_fixed_bits(address: int, bits: Iterable[int]):
     return [MMC_FixedBit(address, bit) for bit in bits]
 
 
 class MMC_FixedByte(MMC_Bytes):
-    def __init__(self, address: int, value=0):
+    def __init__(self, address: int, value=0xFF):
         super().__init__('', [address])
         self.value = value
 

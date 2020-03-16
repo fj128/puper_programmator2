@@ -5,7 +5,7 @@ from tkinter.font import Font
 from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth, enumerate_first_last
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
     MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes,
-    MMC_Phone, make_zero_bits)
+    MMC_Phone, make_fixed_bits)
 
 import logging
 log = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ def create_widgets(tabs):
     ctrl = MMC_BCD(page, 'Номер коммуникатора', 0, 4)
     grid_label_and_control_mmc(ctrl)
 
-    make_zero_bits(2, range(1, 8))
+    make_fixed_bits(2, range(1, 8))
 
     ctrl = MMC_Choice(page, 'Тип контрольной панели', 3, [2, 1, 0], {
         0: 'Коммуникатор',
@@ -283,7 +283,7 @@ def create_widgets(tabs):
         ctrl = MMC_Checkbutton(frame, 'PGM задействован', bitmap_addr, 7)
         grid_control(ctrl, sticky='w')
 
-        make_zero_bits(bitmap_addr, [6, 3, 2])
+        make_fixed_bits(bitmap_addr, [6, 3, 2])
 
         # Режим работы: Потенциальный Импульсный
         # ctrl = MMC_Checkbutton(frame, 'Импульсный', bitmap_addr, 1)
@@ -347,7 +347,7 @@ def create_widgets(tabs):
         frame.grid(row=row, column=3, rowspan=2, columnspan=2)
 
         bitmap_addr = base_addr + 5
-        make_zero_bits(bitmap_addr, [7, 6, 5, 4, 0])
+        make_fixed_bits(bitmap_addr, [7, 6, 5, 4, 0])
 
         ctrl = MMC_Checkbutton(frame, 'PGM1', bitmap_addr, 2)
         grid_control(ctrl)
