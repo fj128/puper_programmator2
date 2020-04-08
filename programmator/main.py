@@ -7,11 +7,12 @@ from tkinter.scrolledtext import ScrolledText
 import logging
 log = logging.getLogger(__name__)
 
-from programmator.utils import tk_append_readonly_text, set_high_DPI_awareness, CallbackLogHandler
+from programmator.utils import tk_append_readonly_text, tk_center_window, set_high_DPI_awareness, CallbackLogHandler
 from programmator.port_monitor import PortMonitor
 from programmator.progress_window import ProgressWindow
 from programmator.comms import ThreadController
 from programmator import panel, device_memory
+from programmator.pinmanager import pinmanager
 
 
 class Application:
@@ -34,6 +35,8 @@ class Application:
         root_logger = logging.getLogger()
         root_logger.addHandler(self.log_handler)
         root_logger.setLevel(logging.DEBUG) # use INFO in production. And add full logging to a file.
+
+        tk_center_window(self.root, True)
 
         self.port_monitor = PortMonitor(self.on_connection_status_changed)
         self.start_scanning_ports()
@@ -93,8 +96,6 @@ class Application:
         tabs.pack(expand=True, fill=tk.BOTH)
         # tabs.select(tabs.index(tk.END) - 1)
 
-        # TODO: test on different resolutions
-        # self.set_initial_window_position()
 
     def on_connection_status_changed(self, connected: bool):
         if self.stopping:
@@ -116,16 +117,6 @@ class Application:
         tk_append_readonly_text(self.log_text, s, self.buffer_line_count, True)
         if self.progress_window:
             self.progress_window.log(s)
-
-
-    def set_initial_window_position(self):
-        sw = self.root.winfo_screenwidth()
-        sh = self.root.winfo_screenheight()
-        w = int(sw * 0.75)
-        h = int(sh * 0.75) # this doesn't include the window title apparently, so the result is kinda fucky
-        y = (sh - h * 1.05) // 2
-        x = (sw - w) // 2
-        self.root.geometry('%dx%d+%d+%d' % (w, h, x, y))
 
 
     def invoke_on_main_thread(self, f, *args, **kwargs):
@@ -201,6 +192,7 @@ class Application:
             log.error('Not connected')
             return
         if self.readwrite_in_thread('Считывание', device_memory.read_into_memory_map):
+            pinmanager.check_pin(self.root)
             device_memory.populate_controls_from_memory_map()
             self.button_write.configure(state=tk.NORMAL)
 

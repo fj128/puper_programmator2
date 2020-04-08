@@ -77,14 +77,21 @@ def read_into_memory_map(port, controller: ThreadController):
 
 
 def populate_controls_from_memory_map():
+    # import here to avoid import cycles
+    from programmator.pinmanager import pinmanager
     for control in controls:
-        control.from_memory_map()
+        if pinmanager.can_access_pin_protected or not control.pin_protected:
+            control.from_memory_map()
 
 
 def populate_memory_map_from_controls():
-    memory_map.clear()
+    from programmator.pinmanager import pinmanager
+    # hack: don't clear memory map
+    # fixme: compute a different memory map when not writing pin-protected data
+    # memory_map.clear()
     for control in controls:
-        control.to_memory_map()
+        if pinmanager.can_access_pin_protected or not control.pin_protected:
+            control.to_memory_map()
     return True
 
 
@@ -159,6 +166,7 @@ class MMC_Base:
     def __init__(self, description:str, base_address: str):
         self.base_address = base_address # for error reporting purposes
         self.description = description
+        self.pin_protected = False
         controls.append(self)
 
 
@@ -299,6 +307,14 @@ class MMC_Checkbutton(MMC_Bits):
         self.control = tk.Checkbutton(parent, var=self.var, text=text)
 
 
+    def clear(self):
+        self.var.set(0)
+
+
+    def set_default_value(self):
+        self.clear()
+
+
     def from_memory_map(self):
         self.var.set(self.from_memory_map_raw())
 
@@ -399,6 +415,10 @@ class MMC_IP_Port(MMC_Bytes):
         self.set_default_value()
 
 
+    def clear(self):
+        self.var.set('')
+
+
     def set_default_value(self):
         self.var.set('0.0.0.0:2048')
 
@@ -439,6 +459,8 @@ class MMC_BCD(MMC_Bytes):
 
 
     def digit_to_char(self, d):
+        if not 0 <= d <= 9:
+            raise Exception(f'{self}: недесятичная цифра в данных: {pretty_hexlify(val)}')
         return str(d)
 
 
@@ -448,18 +470,14 @@ class MMC_BCD(MMC_Bytes):
 
     def from_memory_map(self):
         val = self.from_memory_map_raw()
-        def validate_digit(digit):
-            if not 0 <= digit <= 9:
-                raise Exception(f'{self}: недесятичная цифра в данных: {pretty_hexlify(val)}')
-            return self.digit_to_char(digit)
         result = []
         try:
             for b in val:
-                result.append(validate_digit(b >> 4))
+                result.append(self.digit_to_char(b >> 4))
                 if len(result) < self.length:
-                    result.append(validate_digit(b & 0x0F))
+                    result.append(self.digit_to_char(b & 0x0F))
                 elif b & 0x0F:
-                        raise Exception(f'{self}: последний ниббл в данных должен быть нулём: {pretty_hexlify(val)}')
+                    raise Exception(f'{self}: последний ниббл в данных должен быть нулём: {pretty_hexlify(val)}')
         except Exception as exc:
             log.error(exc)
             self.set_default_value()
@@ -487,13 +505,13 @@ class MMC_BCD_A(MMC_BCD.cls):
     'In alert messages 0 is replaced with A'
 
     def digit_to_char(self, d):
-        return str(d) if d else 'A'
+        return super().digit_to_char(d) if d else 'A'
 
 
     def char_to_digit(self, c):
-        if c.upper() in 'A\u0410': # cyrillic A
+        if c.upper() in 'A\u0410': # accept latin and cyrillic A
             return 0
-        return int(c)
+        return super().char_to_digit(c)
 
 
 @return_wrapped_control
@@ -582,6 +600,7 @@ class MMC_Phone(MMC_Bytes):
         self.varplus = tk.StringVar(parent)
         self.plus = tk.Entry(self.control, textvariable=self.varplus, width=1, relief=tk.FLAT, state=tk.DISABLED)
         self.plus.configure(disabledforeground=self.plus.cget('foreground'))
+        setattr(self.plus, 'hack_dont_set_state', True) # avoid mypy complaining
         self.plus.pack(side=tk.LEFT, expand=True, fill='y')
         self.varplus.set('+')
 
@@ -592,8 +611,12 @@ class MMC_Phone(MMC_Bytes):
         self.set_default_value()
 
 
-    def set_default_value(self):
+    def clear(self):
         self.var.set('')
+
+
+    def set_default_value(self):
+        self.clear()
 
 
     def from_memory_map(self):

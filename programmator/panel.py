@@ -6,6 +6,7 @@ from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth, enum
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
     MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes,
     MMC_Phone, make_fixed_bits)
+from programmator.pinmanager import pinmanager
 
 import logging
 log = logging.getLogger(__name__)
@@ -54,6 +55,8 @@ def grid_separator(parent, visible=True, columnspan=2):
 
 def recursively_set_state(widget, state):
     try:
+        if getattr(widget, 'hack_dont_set_state', None):
+            return
         widget.configure(state=state)
     except tk.TclError:
         pass
@@ -145,19 +148,47 @@ def create_widgets(tabs):
 
     grid_separator(page)
 
-    cb_master_mode = None
+    # PIN protected controls
 
-    # def master_mode_toggle():
-    #     enabled = cb_master_mode.var.get()
-    #     for it in master_controls:
-    #         it.configure(state=tk.NORMAL if enabled else tk.DISABLED)
+    pin_protected_controls = []
 
-    # var = tk.IntVar(page)
-    # ctrl = cb_master_mode = tk.Checkbutton(page, text='Режим установщика', var=var, command=master_mode_toggle)
-    # ctrl.var = var
+    def pin_status_changed():
+        if pinmanager.can_access_pin_protected:
+            for it in pin_protected_controls:
+                recursively_set_state(it, tk.NORMAL)
+        else:
+            for it in pin_protected_controls:
+                it.mmc.clear()
+                recursively_set_state(it, tk.DISABLED)
+
+        toggle_pin_status_button.configure(text={
+            pinmanager.OPEN: 'Закрыть',
+            pinmanager.VALID: 'Сменить пин',
+            pinmanager.CLOSED: 'Сбросить настройки'}[pinmanager.status])
+
+        pin_status_label.configure(text={
+            pinmanager.OPEN: 'Дополнительные настройки открыты',
+            pinmanager.VALID: 'Дополнительные настройки защищены',
+            pinmanager.CLOSED: 'Дополнительные настройки недоступны'}[pinmanager.status])
+
+    pinmanager.on_status_changed = pin_status_changed
+
+    def toggle_pin_status():
+        if pinmanager.can_access_pin_protected:
+            # then close or change pin
+            pinmanager.change_pin(page.winfo_toplevel())
+        else:
+            for it in pin_protected_controls:
+                it.mmc.set_default_value()
+            pinmanager.clear_pin()
+
+
+
+    toggle_pin_status_button = tk.Button(page, text='---', command=toggle_pin_status)
+    pin_status_label = tk.Label(page, text='---')
+    grid_control_and_control(page, pin_status_label, toggle_pin_status_button)
+
     # grid_control(ctrl, pady=(0, 15))
-
-    master_controls = []
 
     name = 'Основной IP:port'
     ctrl1 = tk.Checkbutton(page, text=name)
@@ -165,6 +196,7 @@ def create_widgets(tabs):
     ctrl1.configure(state=tk.DISABLED)
     ctrl2 = MMC_IP_Port(page, name, 142)
     grid_control_and_control(page, ctrl1, ctrl2, kwargs1=dict(sticky='w'))
+    pin_protected_controls.append(ctrl2)
 
     MMC_FixedBit(3, 3)
     MMC_FixedBit(3, 4, 1)
@@ -172,24 +204,27 @@ def create_widgets(tabs):
     ctrl1 = MMC_Checkbutton(page, name, 3, 5)
     ctrl2 = MMC_IP_Port(page, name, 183)
     grid_control_and_control(page, ctrl1, ctrl2, kwargs1=dict(sticky='w'))
+    pin_protected_controls.append(ctrl1)
+    pin_protected_controls.append(ctrl2)
 
     name = 'Телефон резервного СМС канала SIM1'
     ctrl1 = MMC_Checkbutton(page, name, 3, 6)
     ctrl2 = MMC_Phone(page, name, 224, 16)
     grid_control_and_control(page, ctrl1, ctrl2)
-    master_controls.append(ctrl1)
-    master_controls.append(ctrl2)
+    pin_protected_controls.append(ctrl1)
+    pin_protected_controls.append(ctrl2)
 
     name = 'Телефон резервного СМС канала SIM2'
     ctrl1 = MMC_Checkbutton(page, name, 3, 7)
     ctrl2 = MMC_Phone(page, name, 240, 16)
     grid_control_and_control(page, ctrl1, ctrl2)
-    master_controls.append(ctrl1)
-    master_controls.append(ctrl2)
+    pin_protected_controls.append(ctrl1)
+    pin_protected_controls.append(ctrl2)
 
-
-    # for it in master_controls:
-    #     it.configure(state=tk.DISABLED)
+    for it in pin_protected_controls:
+        it.mmc.pin_protected = True
+    # hack: manually trigger it, for a default-initialized panel everything should be consistent with OPEN
+    pin_status_changed()
 
     ########
 
