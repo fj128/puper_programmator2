@@ -8,7 +8,8 @@ from programmator.utils import Dialog
 class PseudoMMC_Int(MMC_Bytes):
     def __init__(self, name, addresses: List[int]):
         super().__init__(name, addresses)
-        self.pin_protected = True # note this!
+        # pin itself is pin_protected too to avoid accidentally writing it back.
+        self.pin_protected = True
         self.value = 0
 
 
@@ -98,7 +99,7 @@ class PinManager:
             self._set_status(self.OPEN)
             return
         user_pin = PinDialog(parent, 'Проверка пина для открытия дополнительных настроек',
-                'Введите пин или нажмите "Отмена":').pin
+                'Введите пин для открытия дополнительных настроек или нажмите "Отмена":').pin
         if user_pin is not None:
             if user_pin == self.pin.value:
                 self._set_status(self.VALID)
@@ -118,6 +119,18 @@ class PinManager:
     def clear_pin(self):
         self.pin.value = 0
         self._set_status(self.OPEN)
+
+
+    def update_status_after_loading_file(self, pin_protected):
+        if pin_protected:
+            self.version.from_memory_map()
+            self.pin.from_memory_map()
+            if self.pin.value == 0:
+                self._set_status(self.OPEN)
+            else:
+                self._set_status(self.VALID)
+        else:
+            self._set_status(self.CLOSED)
 
 
 # singleton

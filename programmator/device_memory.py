@@ -17,8 +17,10 @@ controls: 'List[MMC_Base]' = []
 bit_memory_registry: 'Dict[int, Dict[int, MMC_Base]]' = {}
 byte_memory_registry: 'Dict[int, MMC_Base]' = {}
 
-memory_spans: List[Tuple[int, int]] = []
-total_bytes = 0
+memory_spans_all: List[Tuple[int, int]] = []
+memory_spans_unlocked: List[Tuple[int, int]] = []
+total_bytes_all = 0
+total_bytes_unlocked = 0
 
 # actual dynamic memory
 
@@ -27,23 +29,14 @@ memory_map: Dict[int, int] = {}
 
 # API
 
-def finish_initialization():
-    # sanity check
-    for address, bits in bit_memory_registry.items():
-        if len(bits) != 8:
-            print(bits)
-            assert False, f'Incomplete byte at {address}'
-
-    # compute spans
-    addresses = sorted(bit_memory_registry.keys() | byte_memory_registry.keys())
+def _compute_spans(addresses):
     spans = []
-
     start = None
     prev = None
     page_mask = 0xFF80
     bytes_per_span = 15
 
-    for addr in addresses:
+    for addr in sorted(addresses):
         if start is None:
             start = prev = addr
         elif (     addr != prev + 1
@@ -54,16 +47,30 @@ def finish_initialization():
         else:
             prev = addr
     spans.append((start, prev + 1))
-    memory_spans[:] = spans
-    global total_bytes
-    total_bytes = sum(end - start for start, end in memory_spans)
+    total_bytes = sum(end - start for start, end in spans)
+    return spans, total_bytes
+
+
+def finish_initialization():
+    # sanity check
+    for address, bits in bit_memory_registry.items():
+        if len(bits) != 8:
+            print(bits)
+            assert False, f'Incomplete byte at {address}'
+
+    global memory_spans_all, total_bytes_all
+    global memory_spans_unprotected, total_bytes_unprotected
+    memory_spans_all, total_bytes_all = _compute_spans(bit_memory_registry.keys() | byte_memory_registry.keys())
+    memory_spans_unprotected, total_bytes_unprotected = _compute_spans(bit_memory_registry.keys() | (
+            addr for addr, mmc in byte_memory_registry.items() if not mmc.pin_protected))
 
 
 def read_into_memory_map(port, controller: ThreadController):
+    # we currently always read all, then check pin
     memory_map.clear()
     with timeit_block('Reading device memory'):
         read_bytes = 0
-        for start, end in memory_spans:
+        for start, end in memory_spans_all:
             msg = Message(1, start, [0] * (end - start))
             resp = send_receive(port, msg, controller)
             if resp is None:
@@ -72,7 +79,7 @@ def read_into_memory_map(port, controller: ThreadController):
             for i, b in enumerate(resp.data):
                 memory_map[start + i] = b
             read_bytes += end - start
-            controller.report_progress(read_bytes, total_bytes)
+            controller.report_progress(read_bytes, total_bytes_all)
         return True
 
 
@@ -86,17 +93,25 @@ def populate_controls_from_memory_map():
 
 def populate_memory_map_from_controls():
     from programmator.pinmanager import pinmanager
-    # hack: don't clear memory map
-    # fixme: compute a different memory map when not writing pin-protected data
-    # memory_map.clear()
+    memory_map.clear()
     for control in controls:
         if pinmanager.can_access_pin_protected or not control.pin_protected:
             control.to_memory_map()
     return True
 
 
+def _get_appropriate_spans(pin_protected=None):
+    from programmator.pinmanager import pinmanager
+    if pin_protected is None:
+        pin_protected = pinmanager.can_access_pin_protected
+    if pin_protected:
+        return memory_spans_all, total_bytes_all
+    else:
+        return memory_spans_unprotected, total_bytes_unprotected
+
 
 def write_from_memory_map(port, controller: ThreadController):
+    memory_spans, total_bytes = _get_appropriate_spans()
     write_bytes = 0
     for start, end in memory_spans:
         msg = Message(0, start, [memory_map[i] for i in range(start, end)])
@@ -107,6 +122,35 @@ def write_from_memory_map(port, controller: ThreadController):
         write_bytes += end - start
         controller.report_progress(write_bytes, total_bytes)
     return True
+
+
+def memory_map_to_str(pin_protected):
+    memory_spans, _ = _get_appropriate_spans(pin_protected)
+    res = ['v0.0.19', str(int(pin_protected))]
+    for start, end in memory_spans:
+        s = ' '.join(f'{memory_map[i]:02X}' for i in range(start, end))
+        res.append(f'{start} {end} {s}')
+    return '\n'.join(res)
+
+
+def memory_map_from_str(s):
+    line_iter = iter(s.split('\n'))
+    version = next(line_iter)
+    assert version == 'v0.0.19'
+    pin_protected = bool(int(next(line_iter)))
+
+    memory_spans, _ = _get_appropriate_spans(pin_protected)
+
+    memory_map.clear()
+    for start, end in memory_spans:
+        fstart, fend, *hh = next(line_iter).split()
+        assert int(fstart) == start
+        assert int(fend) == end
+        assert len(hh) == end - start
+        for i, h in zip(range(start, end), hh):
+            memory_map[i] = int(h, 16)
+
+    return pin_protected
 
 
 # helpers
@@ -188,6 +232,12 @@ class MMC_Base:
     def to_memory_map(self):
         raise NotImplementedError()
 
+    def set_default_value(self):
+        raise NotImplementedError()
+
+    def clear(self):
+        # a separate method is sometimes needed for pin-protected controls
+        self.set_default_value()
 
     # utility
 
@@ -307,12 +357,8 @@ class MMC_Checkbutton(MMC_Bits):
         self.control = tk.Checkbutton(parent, var=self.var, text=text)
 
 
-    def clear(self):
-        self.var.set(0)
-
-
     def set_default_value(self):
-        self.clear()
+        self.var.set(0)
 
 
     def from_memory_map(self):
@@ -415,12 +461,12 @@ class MMC_IP_Port(MMC_Bytes):
         self.set_default_value()
 
 
+    def set_default_value(self):
+        self.var.set('0.0.0.0:0000')
+
+
     def clear(self):
         self.var.set('')
-
-
-    def set_default_value(self):
-        self.var.set('0.0.0.0:2048')
 
 
     def from_memory_map(self):
@@ -611,12 +657,8 @@ class MMC_Phone(MMC_Bytes):
         self.set_default_value()
 
 
-    def clear(self):
-        self.var.set('')
-
-
     def set_default_value(self):
-        self.clear()
+        self.var.set('')
 
 
     def from_memory_map(self):

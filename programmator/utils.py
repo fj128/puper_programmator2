@@ -1,8 +1,11 @@
+import os
 import tkinter as tk
 import tkinter.font
 import logging
 from typing import Callable
 from contextlib import contextmanager
+import pyaes
+
 
 import logging
 log = logging.getLogger(__name__)
@@ -17,6 +20,27 @@ def enumerate_first_last(lst):
     last = len(lst) - 1
     for i, it in enumerate(lst):
         yield i == 0, i == last, it
+
+
+# use the dumbest possible encryption scheme that still completely mangles the file
+_encryption_key = b'super secret key, 32 bytes, asdf'
+
+def encrypt_string(s: str):
+    b = s.encode('utf-8')
+    iv = os.urandom(16)
+    encrypter = pyaes.Encrypter(pyaes.AESModeOfOperationCBC(_encryption_key, iv))
+    res = iv
+    res += encrypter.feed(s)
+    res += encrypter.feed()
+    return res
+
+
+def decrypt_string(s: bytes):
+    iv, s = s[:16], s[16:]
+    decrypter = pyaes.Decrypter(pyaes.AESModeOfOperationCBC(_encryption_key, iv))
+    res = decrypter.feed(s)
+    res += decrypter.feed()
+    return res.decode('utf-8')
 
 
 @contextmanager
@@ -167,6 +191,7 @@ class VerticalScrolledFrame(tk.Frame):
 
 
 # based on https://effbot.org/tkinterbook/tkinter-dialog-windows.htm
+# todo: inherit from tkinter.simpledialog.Dialog
 class Dialog(tk.Toplevel):
     def __init__(self, parent, title=None):
         tk.Toplevel.__init__(self, parent)
@@ -184,6 +209,7 @@ class Dialog(tk.Toplevel):
             self.initial_focus = self
         self.protocol("WM_DELETE_WINDOW", self.cancel)
         tk_center_window(self)
+        self.resizable(False, False)
         self.initial_focus.focus_set()
         self.wait_window(self)
 
@@ -245,3 +271,6 @@ class Dialog(tk.Toplevel):
 if __name__ == '__main__':
     from programmator.main import main
     main()
+    # s = encrypt_string('some string')
+    # print(s)
+    # print(decrypt_string(s))

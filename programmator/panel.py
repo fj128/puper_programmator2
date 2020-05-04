@@ -115,29 +115,6 @@ def create_widgets(tabs):
     ctrl.mmc.var.set('16A2AAAAA')
     grid_label_and_control_mmc(ctrl)
 
-    # SIM1
-
-    def SIM(n, apn_offset):
-        row = next_grid_row(page)
-        frame = tk.Frame(page)
-
-        ctrl = tk.Label(frame, text=f'APN{n}')
-        ctrl.pack(side=tk.RIGHT, padx=(30, 0))
-
-        if n == 1:
-            ctrl = tk.Checkbutton(frame, text=f'SIM{n}')
-            ctrl.select()
-            ctrl.config(state=tk.DISABLED)
-        else:
-            ctrl = MMC_Checkbutton(frame, f'SIM{n}', 2, 0)
-        ctrl.pack(side=tk.RIGHT)
-
-        ctrl = MMC_String(page, f'APN{n}', apn_offset, 20)
-        grid_control_and_control(page, frame, ctrl)
-
-    SIM(1, 163)
-    SIM(2, 204)
-
     # ctrl = MMC_Choice(page, 'Рапорт на IP адреса', 3, [5, 4, 3], {
     #     0b100: 'IP 1',
     #     0b010: 'IP 2',
@@ -182,13 +159,33 @@ def create_widgets(tabs):
                 it.mmc.set_default_value()
             pinmanager.clear_pin()
 
-
-
     toggle_pin_status_button = tk.Button(page, text='---', command=toggle_pin_status)
     pin_status_label = tk.Label(page, text='---')
     grid_control_and_control(page, pin_status_label, toggle_pin_status_button)
 
-    # grid_control(ctrl, pady=(0, 15))
+    # SIM/APN
+
+    def SIM(n, apn_offset):
+        row = next_grid_row(page)
+        frame = tk.Frame(page)
+
+        ctrl = tk.Label(frame, text=f'APN{n}')
+        ctrl.pack(side=tk.RIGHT, padx=(30, 0))
+
+        if n == 1:
+            ctrl = tk.Checkbutton(frame, text=f'SIM{n}')
+            ctrl.select()
+            ctrl.config(state=tk.DISABLED)
+        else:
+            ctrl = MMC_Checkbutton(frame, f'SIM{n}', 2, 0)
+        ctrl.pack(side=tk.RIGHT)
+
+        ctrl = MMC_String(page, f'APN{n}', apn_offset, 20)
+        grid_control_and_control(page, frame, ctrl)
+        pin_protected_controls.append(ctrl)
+
+    SIM(1, 163)
+    SIM(2, 204)
 
     name = 'Основной IP:port'
     ctrl1 = tk.Checkbutton(page, text=name)

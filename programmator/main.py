@@ -1,13 +1,16 @@
 import re, string, threading, queue, time
 
 import tkinter as tk
+from tkinter import filedialog
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
+import tkinter.messagebox
 
 import logging
 log = logging.getLogger(__name__)
 
-from programmator.utils import tk_append_readonly_text, tk_center_window, set_high_DPI_awareness, CallbackLogHandler
+from programmator.utils import (tk_append_readonly_text, tk_center_window, set_high_DPI_awareness,
+        CallbackLogHandler, encrypt_string, decrypt_string)
 from programmator.port_monitor import PortMonitor
 from programmator.progress_window import ProgressWindow
 from programmator.comms import ThreadController
@@ -31,10 +34,14 @@ class Application:
         self.log_handler = CallbackLogHandler(lambda s:
             self.invoke_on_main_thread(self.log, s))
 
-        self.log_handler.setFormatter(logging.Formatter('{levelname}: {message}', style='{'))
+        formatter = logging.Formatter('{asctime}|{levelname}| {message}',
+                style='{')
+        formatter.default_time_format='%H:%M:%S'
+        formatter.default_msec_format='%s.%03d'
+        self.log_handler.setFormatter(formatter)
         root_logger = logging.getLogger()
         root_logger.addHandler(self.log_handler)
-        root_logger.setLevel(logging.DEBUG) # use INFO in production. And add full logging to a file.
+        root_logger.setLevel(logging.INFO)
 
         tk_center_window(self.root, True)
 
@@ -66,10 +73,10 @@ class Application:
         self.button_reset = tk.Button(button_panel, text='Сбросить', command=self.cmd_reset, state=tk.DISABLED)
         self.button_reset.pack(side=tk.LEFT)
 
-        self.button_loadfile = tk.Button(button_panel, text='Из файла', command=self.cmd_loadfile, state=tk.DISABLED)
+        self.button_loadfile = tk.Button(button_panel, text='Из файла', command=self.cmd_loadfile)
         self.button_loadfile.pack(side=tk.LEFT, padx=(5, 0))
 
-        self.button_savefile = tk.Button(button_panel, text='Сохранить', command=self.cmd_savefile, state=tk.DISABLED)
+        self.button_savefile = tk.Button(button_panel, text='Сохранить', command=self.cmd_savefile)
         self.button_savefile.pack(side=tk.LEFT)
 
         button_settings = tk.Button(button_panel, text='Настройки', state=tk.DISABLED)
@@ -90,8 +97,7 @@ class Application:
 
         panel.create_widgets(tabs)
 
-        # disable for now
-        # tabs.add(log_page, text='-- Журнал')
+        tabs.add(log_page, text='-- Журнал')
 
         tabs.pack(expand=True, fill=tk.BOTH)
         # tabs.select(tabs.index(tk.END) - 1)
@@ -176,6 +182,7 @@ class Application:
         pw.on_abort = abort
 
         try:
+            log.info(f'{title} памяти устройства')
             worker.start()
             if pw.run():
                 return True
@@ -193,6 +200,7 @@ class Application:
             return
         if self.readwrite_in_thread('Считывание', device_memory.read_into_memory_map):
             pinmanager.check_pin(self.root)
+            log.info('Загрузка данных в интерфейс')
             device_memory.populate_controls_from_memory_map()
             self.button_write.configure(state=tk.NORMAL)
 
@@ -202,9 +210,11 @@ class Application:
             log.error('Not connected')
             return
         try:
+            log.info('Выгрузка данных из интерфейса в образ памяти')
             if device_memory.populate_memory_map_from_controls():
                 # read back rounded values
                 device_memory.populate_controls_from_memory_map()
+                log.info('Запись в память устройства')
                 self.readwrite_in_thread('Запись', device_memory.write_from_memory_map)
         except Exception as exc:
             log.error(exc)
@@ -216,11 +226,39 @@ class Application:
 
 
     def cmd_loadfile(self):
-        ''
+        file = filedialog.askopenfile(parent=self.root,
+                filetypes=[('hex', '*.hex')],
+                defaultextension='hex',
+                mode='rb')
+
+        if file is None:
+            return
+        s = decrypt_string(file.read())
+        pin_protected = device_memory.memory_map_from_str(s)
+        pinmanager.update_status_after_loading_file(pin_protected)
+        device_memory.populate_controls_from_memory_map()
 
 
     def cmd_savefile(self):
-        ''
+        file = filedialog.asksaveasfile(parent=self.root,
+                filetypes=[('hex', '*.hex')],
+                defaultextension='hex',
+                mode='wb')
+        if file is None:
+            return
+
+        pin_protected = False
+        if pinmanager.status == pinmanager.OPEN:
+            # always save open data
+            pin_protected = True
+        elif pinmanager.status == pinmanager.VALID:
+            res = tk.messagebox.askquestion('Сохранить закрытые данные?', 'Сохранить в файл пин и закрытые им данные?', icon = 'warning')
+            if res == 'yes':
+                pin_protected = True
+        # FIXME: this can result in an error
+        device_memory.populate_memory_map_from_controls()
+        s = device_memory.memory_map_to_str(pin_protected)
+        file.write(encrypt_string(s))
 
 
     def cmd_unbrick(self):
