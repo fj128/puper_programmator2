@@ -261,7 +261,7 @@ def create_widgets(tabs):
         ctrl = MMC_Checkbutton(frame, 'SMS рассылка', bitmap_addr, 6)
         grid_control(ctrl, sticky='w')
 
-        if not is_input_nine:
+        if not (is_input_nine or is_input_ten):
             # Тип зоны - Только под охраной, 24х часовая
             ctrl = MMC_Checkbutton(frame, '24-х часовой', bitmap_addr, 2)
             grid_control(ctrl, column=2, sticky='w')
@@ -277,7 +277,7 @@ def create_widgets(tabs):
         MMC_FixedBit(bitmap_addr, 3)
         MMC_FixedBit(bitmap_addr, 1)
 
-        if not is_input_nine:
+        if not (is_input_nine or is_input_ten):
             ctrl = MMC_Choice(frame, 'Уровень срабатывания', bitmap_addr, [0], {
                 0: 'Низкий',
                 1: 'Высокий',
@@ -295,7 +295,7 @@ def create_widgets(tabs):
         ctrl = MMC_BCD(frame, 'Район', base_addr + 8, 2) # 00-99, 00
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_BCD(frame, 'Пользователь', base_addr + 9, 3) # 000-999, 000
+        ctrl = MMC_BCD(frame, 'Пользователь/Зона', base_addr + 9, 3) # 000-999, 000
         grid_label_and_control_mmc(ctrl, column=2)
 
         grid_separator(frame, False)
@@ -316,14 +316,6 @@ def create_widgets(tabs):
         grid_control(ctrl, sticky='w')
 
         make_fixed_bits(bitmap_addr, [6, 3, 2])
-
-        # Режим работы: Потенциальный Импульсный
-        # ctrl = MMC_Checkbutton(frame, 'Импульсный', bitmap_addr, 1)
-        # grid_control(ctrl, sticky='w')
-
-        # # Тип выхода: Нормально разомкнут, Нормально замкнут
-        # ctrl = MMC_Checkbutton(frame, 'Нормально разомкнут', bitmap_addr, 0)
-        # grid_control(ctrl, column=2, sticky='w')
 
         ctrl = MMC_Choice(frame, 'Режим работы', bitmap_addr, [1], {
             0: 'Потенциальный',
@@ -375,11 +367,11 @@ def create_widgets(tabs):
         ctrl = MMC_BCD(container, f'PIN', base_addr + 6, 4)
         grid_label_and_control_mmc(ctrl)
 
-        frame = tk.LabelFrame(container, text='Права')
+        frame = tk.LabelFrame(container, text='Управление коммуникатором')
         frame.grid(row=row, column=3, rowspan=2, columnspan=2)
 
         bitmap_addr = base_addr + 5
-        make_fixed_bits(bitmap_addr, [7, 6, 5, 4, 0])
+        make_fixed_bits(bitmap_addr, [7, 6, 5, 4])
 
         ctrl = MMC_Checkbutton(frame, 'PGM1', bitmap_addr, 2)
         grid_control(ctrl)
@@ -389,6 +381,9 @@ def create_widgets(tabs):
 
         ctrl = MMC_Checkbutton(frame, 'Постановка/Снятие', bitmap_addr, 1)
         grid_control(ctrl, column=4)
+
+        ctrl = MMC_Checkbutton(frame, 'Управление MAGELLAN', bitmap_addr, 0)
+        grid_control(ctrl, column=6)
 
         grid_separator(container, columnspan=4)
 
