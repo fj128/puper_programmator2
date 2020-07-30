@@ -64,6 +64,8 @@ def finish_initialization():
     memory_spans_unprotected, total_bytes_unprotected = _compute_spans(bit_memory_registry.keys() | (
             addr for addr, mmc in byte_memory_registry.items() if not mmc.pin_protected))
 
+    set_default_values()
+
 
 def read_into_memory_map(port, controller: ThreadController):
     # we currently always read all, then check pin
@@ -88,7 +90,11 @@ def populate_controls_from_memory_map():
     from programmator.pinmanager import pinmanager
     for control in controls:
         if pinmanager.can_access_pin_protected or not control.pin_protected:
-            control.from_memory_map()
+            if control.is_fixed_value:
+                # TODO: use compare when implemented
+                pass
+            else:
+                control.from_memory_map()
 
 
 def populate_memory_map_from_controls():
@@ -98,6 +104,13 @@ def populate_memory_map_from_controls():
         if pinmanager.can_access_pin_protected or not control.pin_protected:
             control.to_memory_map()
     return True
+
+
+def set_default_values():
+    for control in controls:
+        control.set_default_value()
+        if control.is_fixed_value:
+            control.make_control_readonly()
 
 
 def _get_appropriate_spans(pin_protected=None):
@@ -211,6 +224,9 @@ class MMC_Base:
         self.base_address = base_address # for error reporting purposes
         self.description = description
         self.pin_protected = False
+        self.default_value = ''
+        self.is_fixed_value = False
+        self.var: object = None
         controls.append(self)
 
 
@@ -232,12 +248,20 @@ class MMC_Base:
     def to_memory_map(self):
         raise NotImplementedError()
 
+
     def set_default_value(self):
-        raise NotImplementedError()
+        assert self.var is not None
+        self.var.set(self.default_value)
+
 
     def clear(self):
         # a separate method is sometimes needed for pin-protected controls
         self.set_default_value()
+
+
+    def make_control_readonly(self):
+        self.control.configure(state='readonly')
+
 
     # utility
 
@@ -315,6 +339,10 @@ class MMC_FixedBit(MMC_Bits):
         self.to_memory_map_raw(self.value)
 
 
+    def set_default_value(self):
+        pass
+
+
 def make_fixed_bits(address: int, bits: Iterable[int]):
     return [MMC_FixedBit(address, bit) for bit in bits]
 
@@ -333,6 +361,10 @@ class MMC_FixedByte(MMC_Bytes):
 
     def to_memory_map(self):
         self.to_memory_map_raw([self.value])
+
+
+    def set_default_value(self):
+        pass
 
 
 # Actual controls
@@ -355,10 +387,7 @@ class MMC_Checkbutton(MMC_Bits):
         super().__init__(text, address, [bit])
         self.var = tk.IntVar(parent)
         self.control = tk.Checkbutton(parent, var=self.var, text=text)
-
-
-    def set_default_value(self):
-        self.var.set(0)
+        self.default_value = '0'
 
 
     def from_memory_map(self):
@@ -380,11 +409,6 @@ class MMC_Choice(MMC_Bits):
         self.options_str_to_bin = {v: k for k, v in options.items()}
         self.control = tk.OptionMenu(parent, self.var, *self.options_str_to_bin.keys())
         tk_set_list_maxwidth(self.control, self.options_str_to_bin.keys())
-        self.set_default_value()
-
-
-    def set_default_value(self):
-        self.var.set(self.default_value)
 
 
     def from_memory_map(self):
@@ -406,11 +430,7 @@ class MMC_Int(MMC_Bytes):
         super().__init__(text, addresses)
         self.var = tk.StringVar(parent)
         self.control = tk.Entry(parent, textvariable=self.var)
-        self.set_default_value()
-
-
-    def set_default_value(self):
-        self.var.set('0')
+        self.default_value = '0'
 
 
     def from_memory_map(self):
@@ -431,11 +451,6 @@ class MMC_String(MMC_Bytes):
         super().__init__(text, range(address, address + length))
         self.var = tk.StringVar(parent)
         self.control = tk.Entry(parent, textvariable=self.var)
-        self.set_default_value()
-
-
-    def set_default_value(self):
-        self.var.set('')
 
 
     def from_memory_map(self):
@@ -458,11 +473,7 @@ class MMC_IP_Port(MMC_Bytes):
         super().__init__(text, range(address, address + self.ip_length + self.port_length))
         self.var = tk.StringVar(parent)
         self.control = tk.Entry(parent, textvariable=self.var)
-        self.set_default_value()
-
-
-    def set_default_value(self):
-        self.var.set('0.0.0.0:0000')
+        self.default_value = '0.0.0.0:0000'
 
 
     def clear(self):
@@ -497,11 +508,7 @@ class MMC_BCD(MMC_Bytes):
         self.length = length
         self.var = tk.StringVar(parent)
         self.control = tk.Entry(parent, textvariable=self.var)
-        self.set_default_value()
-
-
-    def set_default_value(self):
-        self.var.set(''.join(self.digit_to_char(0) for _ in range(self.length)))
+        self.default_value = ''.join(self.digit_to_char(0) for _ in range(self.length))
 
 
     def digit_to_char(self, d):
@@ -573,12 +580,8 @@ class MMC_Time(MMC_Bytes):
         assert self.threshold == int(self.threshold)
         self.var = tk.StringVar(parent)
         self.control = tk.Entry(parent, textvariable=self.var)
-        self.set_default_value()
-
-
-    def set_default_value(self):
         # TODO: refactor formatting from to/from_memory_map.
-        self.var.set('{:0.{decimals}f}'.format(0, decimals=self.decimals))
+        self.default_value = '{:0.{decimals}f}'.format(0, decimals=self.decimals)
 
 
     def from_memory_map(self):
@@ -610,11 +613,7 @@ class MMC_LongTimeMinutes(MMC_Bytes):
         super().__init__(text, addresses)
         self.var = tk.StringVar(parent)
         self.control = tk.Entry(parent, textvariable=self.var)
-        self.set_default_value()
-
-
-    def set_default_value(self):
-        self.var.set('0')
+        self.default_value = '0'
 
 
     def from_memory_map(self):
@@ -653,12 +652,6 @@ class MMC_Phone(MMC_Bytes):
         self.var = tk.StringVar(parent)
         self.entry = tk.Entry(self.control, textvariable=self.var)
         self.entry.pack(side=tk.LEFT, expand=True, fill='both')
-
-        self.set_default_value()
-
-
-    def set_default_value(self):
-        self.var.set('')
 
 
     def from_memory_map(self):

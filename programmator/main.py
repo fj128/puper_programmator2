@@ -1,4 +1,5 @@
-import re, string, threading, queue, time
+import re, string, threading, queue, time, traceback
+from contextlib import contextmanager
 
 import tkinter as tk
 from tkinter import filedialog
@@ -43,6 +44,8 @@ class Application:
         root_logger.addHandler(self.log_handler)
         root_logger.setLevel(logging.INFO)
 
+        tk.Tk.report_callback_exception = self.report_callback_exception
+
         tk_center_window(self.root, True)
 
         self.port_monitor = PortMonitor(self.on_connection_status_changed)
@@ -70,7 +73,7 @@ class Application:
         self.button_write = tk.Button(button_panel, text='Записать', command=self.cmd_write, state=tk.DISABLED)
         self.button_write.pack(side=tk.LEFT)
 
-        self.button_reset = tk.Button(button_panel, text='Сбросить', command=self.cmd_reset, state=tk.DISABLED)
+        self.button_reset = tk.Button(button_panel, text='Сбросить', command=self.cmd_reset)
         self.button_reset.pack(side=tk.LEFT)
 
         self.button_loadfile = tk.Button(button_panel, text='Из файла', command=self.cmd_loadfile)
@@ -108,7 +111,7 @@ class Application:
             return
         if connected:
             self.button_read.configure(state=tk.NORMAL)
-            self.button_write.configure(state=tk.DISABLED)
+            self.button_write.configure(state=tk.NORMAL)
             self.button_compare.configure(state=tk.DISABLED)
         else:
             self.button_read.configure(state=tk.DISABLED)
@@ -144,6 +147,28 @@ class Application:
             #     self.root.update_idletasks()
         finally:
             self.root.after(50, self.start_polling_invoke_queue)
+
+
+    class AlreadyReported(Exception):
+        pass
+
+
+    def report_callback_exception(self, etype, value, tb):
+        if etype == self.AlreadyReported:
+            return
+        log.exception('Произошла ошибка!')
+        tk.messagebox.showerror('Произошла ошибка!', traceback.format_exception_only(etype, value))
+
+
+    # for reporting exceptions about specific situations
+    @contextmanager
+    def try_and_report_exception(self, msg):
+        try:
+            yield
+        except:
+            log.exception(msg)
+            tk.messagebox.showerror('Произошла ошибка!', msg)
+            raise self.AlreadyReported()
 
 
     def start_scanning_ports(self):
@@ -202,7 +227,7 @@ class Application:
             pinmanager.check_pin(self.root)
             log.info('Загрузка данных в интерфейс')
             device_memory.populate_controls_from_memory_map()
-            self.button_write.configure(state=tk.NORMAL)
+        log.info(f'Настройки считаны из устройства')
 
 
     def cmd_write(self):
@@ -219,10 +244,12 @@ class Application:
         except Exception as exc:
             log.error(exc)
             raise # tkinter will print it to stdout
+        log.info(f'Настройки записаны в устройство')
 
 
     def cmd_reset(self):
-        'reset to factory settings'
+        device_memory.set_default_values()
+        log.info(f'Настройки сброшены')
 
 
     def cmd_loadfile(self):
@@ -233,10 +260,18 @@ class Application:
 
         if file is None:
             return
-        s = decrypt_string(file.read())
-        pin_protected = device_memory.memory_map_from_str(s)
+
+        with self.try_and_report_exception(f'Не удалось открыть файл {file.name!r}!'):
+            s = file.read()
+
+        with self.try_and_report_exception(f'Неправильные данные в файле {file.name!r}!'):
+            # TODO: implement special processing for invalid version
+            s = decrypt_string(s)
+            pin_protected = device_memory.memory_map_from_str(s)
+
         pinmanager.update_status_after_loading_file(pin_protected)
         device_memory.populate_controls_from_memory_map()
+        log.info(f'Файл {file.name!r} загружен')
 
 
     def cmd_savefile(self):
@@ -259,6 +294,7 @@ class Application:
         device_memory.populate_memory_map_from_controls()
         s = device_memory.memory_map_to_str(pin_protected)
         file.write(encrypt_string(s))
+        log.info(f'Файл {file.name!r} записан')
 
 
     def cmd_unbrick(self):

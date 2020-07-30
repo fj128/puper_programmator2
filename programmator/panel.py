@@ -18,12 +18,18 @@ def revupdate_kwargs(extra_kwargs: dict, **kwargs):
     return kwargs
 
 
+def current_grid_row(parent):
+    return parent.grid_size()[1]
+
+
 def next_grid_row(parent, column=0):
-    return parent.grid_size()[1] - bool(column)
+    # don't actually next unless in zeroeth column
+    return current_grid_row(parent) - bool(column)
 
 
-def grid_control_and_control(parent, control1, control2, column=0, kwargs={}, kwargs1={}, kwargs2={}):
-    row = next_grid_row(parent, column)
+def grid_control_and_control(control1, control2, column=0, kwargs={}, kwargs1={}, kwargs2={}):
+    assert control1.master == control2.master
+    row = next_grid_row(control1.master, column)
     kwargs1 = revupdate_kwargs(kwargs1, **kwargs)
     kwargs2 = revupdate_kwargs(kwargs2, **kwargs)
     control1.grid(revupdate_kwargs(kwargs1, row=row, column=1 + column, sticky='nsew', padx=5))
@@ -31,15 +37,14 @@ def grid_control_and_control(parent, control1, control2, column=0, kwargs={}, kw
     return control1, control2
 
 
-def grid_label_and_control(parent, label_text: str, control, column=0, **kwargs):
-    label = tk.Label(parent, text=label_text)
-    return grid_control_and_control(parent, label, control, column=column, **kwargs)
+def grid_label_and_control(label_text: str, control, column=0, **kwargs):
+    label = tk.Label(control.master, text=label_text)
+    return grid_control_and_control(label, control, column=column, **kwargs)
 
 
 def grid_label_and_control_mmc(mmc_control, column=0, **kwargs):
-    parent = mmc_control.master
     label_text = mmc_control.mmc.description
-    return grid_label_and_control(parent, label_text, mmc_control, column, **kwargs)
+    return grid_label_and_control(label_text, mmc_control, column, **kwargs)
 
 
 def grid_control(control, column=0, **kwargs):
@@ -161,7 +166,7 @@ def create_widgets(tabs):
 
     toggle_pin_status_button = tk.Button(page, text='---', command=toggle_pin_status)
     pin_status_label = tk.Label(page, text='---')
-    grid_control_and_control(page, pin_status_label, toggle_pin_status_button)
+    grid_control_and_control(pin_status_label, toggle_pin_status_button)
 
     # SIM/APN
 
@@ -181,7 +186,7 @@ def create_widgets(tabs):
         ctrl.pack(side=tk.RIGHT)
 
         ctrl = MMC_String(page, f'APN{n}', apn_offset, 20)
-        grid_control_and_control(page, frame, ctrl)
+        grid_control_and_control(frame, ctrl)
         pin_protected_controls.append(ctrl)
 
     SIM(1, 163)
@@ -192,7 +197,7 @@ def create_widgets(tabs):
     ctrl1.select()
     ctrl1.configure(state=tk.DISABLED)
     ctrl2 = MMC_IP_Port(page, name, 142)
-    grid_control_and_control(page, ctrl1, ctrl2, kwargs1=dict(sticky='w'))
+    grid_control_and_control(ctrl1, ctrl2, kwargs1=dict(sticky='w'))
     pin_protected_controls.append(ctrl2)
 
     MMC_FixedBit(3, 3)
@@ -200,21 +205,21 @@ def create_widgets(tabs):
     name = 'Резервный IP:port'
     ctrl1 = MMC_Checkbutton(page, name, 3, 5)
     ctrl2 = MMC_IP_Port(page, name, 183)
-    grid_control_and_control(page, ctrl1, ctrl2, kwargs1=dict(sticky='w'))
+    grid_control_and_control(ctrl1, ctrl2, kwargs1=dict(sticky='w'))
     pin_protected_controls.append(ctrl1)
     pin_protected_controls.append(ctrl2)
 
     name = 'Телефон резервного СМС канала SIM1'
     ctrl1 = MMC_Checkbutton(page, name, 3, 6)
     ctrl2 = MMC_Phone(page, name, 224, 16)
-    grid_control_and_control(page, ctrl1, ctrl2)
+    grid_control_and_control(ctrl1, ctrl2)
     pin_protected_controls.append(ctrl1)
     pin_protected_controls.append(ctrl2)
 
     name = 'Телефон резервного СМС канала SIM2'
     ctrl1 = MMC_Checkbutton(page, name, 3, 7)
     ctrl2 = MMC_Phone(page, name, 240, 16)
-    grid_control_and_control(page, ctrl1, ctrl2)
+    grid_control_and_control(ctrl1, ctrl2)
     pin_protected_controls.append(ctrl1)
     pin_protected_controls.append(ctrl2)
 
@@ -288,15 +293,25 @@ def create_widgets(tabs):
 
         ctrl = MMC_BCD_A(frame, 'Команда срабатывания' if not is_input_nine else 'Команда постановки', base_addr + 4, 4)
         grid_label_and_control_mmc(ctrl)
+        if is_input_ten:
+            ctrl.mmc.default_value = '13А2'
+            ctrl.mmc.is_fixed_value = True
 
         ctrl = MMC_BCD_A(frame, 'Команда восстановления' if not is_input_nine else 'Команда снятия', base_addr + 6, 4)
         grid_label_and_control_mmc(ctrl, column=2)
+        if is_input_ten:
+            ctrl.mmc.default_value = '33А2'
+            ctrl.mmc.is_fixed_value = True
 
         ctrl = MMC_BCD(frame, 'Район', base_addr + 8, 2) # 00-99, 00
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_BCD(frame, 'Пользователь/Зона', base_addr + 9, 3) # 000-999, 000
-        grid_label_and_control_mmc(ctrl, column=2)
+        if not is_input_ten:
+            ctrl = MMC_BCD(frame, 'Пользователь/Зона' if not is_input_nine else 'Пользователь', base_addr + 9, 3) # 000-999, 000
+            grid_label_and_control_mmc(ctrl, column=2)
+        else:
+            for i in range(3):
+                MMC_FixedByte(base_addr + 9 + i)
 
         grid_separator(frame, False)
 
@@ -356,11 +371,10 @@ def create_widgets(tabs):
     grid_control(container)
 
     for i in range(10):
-        row = next_grid_row(container, 0)
         base_addr = 384 + i * 8
+        base_row = next_grid_row(container)
 
         MMC_FixedByte(base_addr + 0) # CLS
-
         ctrl = MMC_BCD(container, f'Телефон №{i + 1}', base_addr + 1, 8)
         grid_label_and_control_mmc(ctrl)
 
@@ -368,7 +382,7 @@ def create_widgets(tabs):
         grid_label_and_control_mmc(ctrl)
 
         frame = tk.LabelFrame(container, text='Управление коммуникатором')
-        frame.grid(row=row, column=3, rowspan=2, columnspan=2)
+        frame.grid(row=base_row, column=3, rowspan=2, columnspan=2)
 
         bitmap_addr = base_addr + 5
         make_fixed_bits(bitmap_addr, [7, 6, 5, 4])
@@ -382,28 +396,25 @@ def create_widgets(tabs):
         ctrl = MMC_Checkbutton(frame, 'Постановка/Снятие', bitmap_addr, 1)
         grid_control(ctrl, column=4)
 
-        ctrl = MMC_Checkbutton(frame, 'Управление MAGELLAN', bitmap_addr, 0)
-        grid_control(ctrl, column=6)
+        # parent = container
+        ctrl = MMC_Checkbutton(container, 'Управление MAGELLAN', bitmap_addr, 0)
+        grid_control(ctrl, column=5, rowspan=2, row=base_row)
 
-        grid_separator(container, columnspan=4)
+        if i < 9:
+            grid_separator(container, columnspan=7)
 
     page = add_tab('СМС рассылка', 'Список телефонов пользователей для рассылки СМС')
     # "обязательно ввести международный код страны" (красным)
     for i in range(10):
         ctrl = tk.Entry(page)
-        grid_label_and_control(page, f'Телефон №{i + 1}', ctrl, kwargs=dict(pady=5))
+        grid_label_and_control(f'Телефон №{i + 1}', ctrl, kwargs=dict(pady=5))
 
     recursively_set_state(page, tk.DISABLED)
-
-    # page = add_tab('Коды доступа', 'Коды доступа DALLAS/карточки')
-    # for i in range(16):
-    #     ctrl = tk.Entry(page)
-    #     grid_label_and_control(page, f'Код доступа №{i + 1}', ctrl, kwargs=dict(pady=5))
 
     page = add_tab('Сообщения', 'Текстовые сообщения пользователя')
     for i in range(16):
         ctrl = tk.Entry(page)
-        grid_label_and_control(page, f'Сообщение №{i + 1}', ctrl, kwargs=dict(pady=5))
+        grid_label_and_control(f'Сообщение №{i + 1}', ctrl, kwargs=dict(pady=5))
 
     recursively_set_state(page, tk.DISABLED)
 

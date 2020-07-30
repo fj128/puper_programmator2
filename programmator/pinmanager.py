@@ -10,7 +10,6 @@ class PseudoMMC_Int(MMC_Bytes):
         super().__init__(name, addresses)
         # pin itself is pin_protected too to avoid accidentally writing it back.
         self.pin_protected = True
-        self.value = 0
 
 
     def from_memory_map(self):
@@ -21,6 +20,10 @@ class PseudoMMC_Int(MMC_Bytes):
     def to_memory_map(self):
         val = int_to_bytes(self.value, len(self.addresses))
         self.to_memory_map_raw(val)
+
+
+    def set_default_value(self):
+        self.value = 0
 
 
 class PinStatus(enum.Enum):
