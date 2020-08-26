@@ -1,0 +1,56 @@
+; based on LUFA virtual serial inf.
+
+[DefaultInstall]
+CopyINF="c5131_cdc_multiplatform.inf"
+
+[Version]
+Signature="$Windows NT$"
+Class=Ports
+ClassGuid={4D36E978-E325-11CE-BFC1-08002BE10318}
+Provider=%MFGNAME%
+DriverVer=7/1/2012,10.0.0.0
+
+[Manufacturer]
+%MFGNAME%=DeviceList, NTx86, NTamd64, NTia64
+
+[SourceDisksNames]
+
+[SourceDisksFiles]
+
+[DestinationDirs]
+DefaultDestDir=12
+
+[DriverInstall]
+Include=mdmcpq.inf
+CopyFiles=FakeModemCopyFileSection
+AddReg=DriverInstall.AddReg
+
+[DriverInstall.Services]
+Include=mdmcpq.inf
+AddService=usbser, 0x00000002, LowerFilter_Service_Inst
+
+[DriverInstall.AddReg]
+HKR,,EnumPropPages32,,"msports.dll,SerialPortPropPageProvider"
+
+;------------------------------------------------------------------------------
+; Devices
+;------------------------------------------------------------------------------
+
+[DeviceList]
+%DESCRIPTION%=DriverInstall, USB\VID_03EB&PID_2009
+
+[DeviceList.NTx86]
+%DESCRIPTION%=DriverInstall, USB\VID_03EB&PID_2009
+
+[DeviceList.NTamd64]
+%DESCRIPTION%=DriverInstall, USB\VID_03EB&PID_2009
+
+[DeviceList.NTia64]
+%DESCRIPTION%=DriverInstall, USB\VID_03EB&PID_2009
+
+;------------------------------------------------------------------------------
+;  String Definitions
+;------------------------------------------------------------------------------
+[Strings]
+MFGNAME="ATMEL"
+DESCRIPTION="AT89C5131 CDC USB to UART MGM"
