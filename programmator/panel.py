@@ -267,11 +267,11 @@ def create_widgets(tabs):
         grid_control(ctrl, sticky='w')
 
         if not (is_input_nine or is_input_ten):
-            # Тип зоны - Только под охраной, 24х часовая
             ctrl = MMC_Checkbutton(frame, '24-х часовой', bitmap_addr, 2)
             grid_control(ctrl, column=2, sticky='w')
         else:
-            MMC_FixedBit(bitmap_addr, 2)
+            # #10-Battery must be always on, #9 doesn't matter but set to 0 just in case.
+            MMC_FixedBit(bitmap_addr, 2, int(is_input_ten))
 
         ctrl = MMC_Checkbutton(frame, 'управление PGM1', bitmap_addr, 4)
         grid_control(ctrl, sticky='w')
