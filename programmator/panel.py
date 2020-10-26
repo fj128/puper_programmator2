@@ -311,7 +311,7 @@ def create_widgets(tabs):
             grid_label_and_control_mmc(ctrl, column=2)
         else:
             for i in range(3):
-                MMC_FixedByte(base_addr + 9 + i)
+                MMC_FixedByte(base_addr + 9 + i, 0x00)
 
         grid_separator(frame, False)
 
