@@ -1,4 +1,4 @@
-import re, string, threading, queue, time, traceback
+import re, string, threading, queue, time, traceback, functools
 from contextlib import contextmanager
 
 import tkinter as tk
@@ -24,6 +24,7 @@ class Application:
         self.buffer_line_count = 2000
         self.stopping = False
         self.progress_window = None
+        self.is_after_factory_reset = True
 
         self.create_widgets(root)
 
@@ -31,18 +32,28 @@ class Application:
         self.invoke_queue = queue.Queue()
         self.start_polling_invoke_queue()
 
-        self.main_thread_id = threading.get_ident()
-        self.log_handler = CallbackLogHandler(lambda s:
-            self.invoke_on_main_thread(self.log, s))
-
+        # configure logging
         formatter = logging.Formatter('{asctime}|{levelname}| {message}',
                 style='{')
         formatter.default_time_format='%H:%M:%S'
         formatter.default_msec_format='%s.%03d'
+
+        # log to visible journal
+        self.main_thread_id = threading.get_ident()
+        self.log_handler = CallbackLogHandler(lambda s:
+            self.invoke_on_main_thread(self.log, s))
         self.log_handler.setFormatter(formatter)
+        self.log_handler.setLevel(logging.INFO)
+
         root_logger = logging.getLogger()
+        root_logger.setLevel(logging.DEBUG)
         root_logger.addHandler(self.log_handler)
-        root_logger.setLevel(logging.INFO)
+
+        # also log to stderr (unsynchronized at the IO level, but should be OK)
+        stderr_handler = logging.StreamHandler()
+        stderr_handler.setLevel(logging.DEBUG)
+        root_logger.addHandler(stderr_handler)
+
 
         tk.Tk.report_callback_exception = self.report_callback_exception
 
@@ -120,7 +131,6 @@ class Application:
 
 
     def log(self, s):
-        print(s)
         if self.stopping:
             return
         tk_append_readonly_text(self.log_text, s, self.buffer_line_count, True)
@@ -227,7 +237,8 @@ class Application:
             pinmanager.check_pin(self.root)
             log.info('Загрузка данных в интерфейс')
             device_memory.populate_controls_from_memory_map()
-        log.info(f'Настройки считаны из устройства')
+            self.is_after_factory_reset = False
+            log.info(f'Настройки считаны из устройства')
 
 
     def cmd_write(self):
@@ -240,7 +251,9 @@ class Application:
                 # read back rounded values
                 device_memory.populate_controls_from_memory_map()
                 log.info('Запись в память устройства')
-                self.readwrite_in_thread('Запись', device_memory.write_from_memory_map)
+                op = functools.partial(device_memory.write_from_memory_map, do_factory_reset=self.is_after_factory_reset)
+                self.readwrite_in_thread('Запись', op)
+                # don't change "is_after_factory_reset" to allow setting up multiple devices
         except Exception as exc:
             log.error(exc)
             raise # tkinter will print it to stdout
@@ -249,6 +262,7 @@ class Application:
 
     def cmd_reset(self):
         device_memory.set_default_values()
+        self.is_after_factory_reset = True
         log.info(f'Настройки сброшены')
 
 
@@ -271,6 +285,7 @@ class Application:
 
         pinmanager.update_status_after_loading_file(pin_protected)
         device_memory.populate_controls_from_memory_map()
+        self.is_after_factory_reset = False
         log.info(f'Файл {file.name!r} загружен')
 
 

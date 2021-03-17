@@ -120,7 +120,7 @@ def tk_center_window(self, resize=False):
 
 class CallbackLogHandler(logging.Handler):
     '''Just call the callback method with formatted log message'''
-    def __init__(self, callback: Callable[[str], None]):
+    def __init__(self, callback: Callable[[str, int], None]):
         super().__init__()
         self.callback = callback
 

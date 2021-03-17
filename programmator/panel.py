@@ -5,7 +5,7 @@ from tkinter.font import Font
 from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth, enumerate_first_last
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
     MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes,
-    MMC_Phone, make_fixed_bits)
+    MMC_Phone, MMC_FactoryResetBytes, make_fixed_bits)
 from programmator.pinmanager import pinmanager
 
 import logging
@@ -70,11 +70,8 @@ def recursively_set_state(widget, state):
 
 
 def create_widgets(tabs):
-    # placeholder pseudo-controls
-    # mmc_version = MMC_Int(tabs, 'version', [1008, 1009]).mmc
-    # mmc_pin = MMC_BCD(tabs, 'PIN', 1014, 6).mmc # 3 bytes instead of specced 6.
-    # log.info(f'version={mmc_version.var.get()}')
-    # log.debug(f'pin={mmc_pin.var.get()}')
+    # Master key + user codes, for Communicator panel
+    MMC_FactoryResetBytes(560, [0x11] * 8 + [0xFF] * 56)
 
     def add_tab(name: str, header=''):
         page = ttk.Frame(tabs)

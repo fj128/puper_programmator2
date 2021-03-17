@@ -2,6 +2,7 @@ from typing import Union, List, Dict, Tuple, Sequence, Any, Iterable
 import functools
 import tkinter as tk
 import re
+import itertools
 
 from programmator.utils import tk_set_list_maxwidth, pretty_hexlify, timeit_block
 from programmator.comms import send_receive, Message, ThreadController
@@ -13,14 +14,32 @@ log = logging.getLogger(__name__)
 
 controls: 'List[MMC_Base]' = []
 
-# used for sanity checking the model
+'''
+We don't always read/write all memory. We have pin-protected areas that we read but not write unless
+we have a valid pin. Both are stored in byte_memory_registry and are used to produce
+memory_spans_all and memory_spans_unlocked.
+
+Additionally there's a separate factory_reset_memory_registry and the derived
+memory_spans_factory_reset that contain only controls that are not read and are written only after
+factory reset (and not after loading from the device or file). I thought about rewriting the code to
+use byte_memory_registry_pin_protected etc in the similar fashion but decided that the functionality
+is different enough that it's not worth it, for example factory reset stuff is used only in
+write_from_memory_map() and supporting it in a generic _get_appropriate_spans will complicate things
+for no good reason.
+
+bit_memory_registry doesn't support pin-protected/factory-reset memory.
+'''
+
 bit_memory_registry: 'Dict[int, Dict[int, MMC_Base]]' = {}
 byte_memory_registry: 'Dict[int, MMC_Base]' = {}
+factory_reset_memory_registry: 'Dict[int, MMC_Base]' = {}
 
 memory_spans_all: List[Tuple[int, int]] = []
 memory_spans_unlocked: List[Tuple[int, int]] = []
+memory_spans_factory_reset: List[Tuple[int, int]] = []
 total_bytes_all = 0
 total_bytes_unlocked = 0
+total_bytes_factory_reset = 0
 
 # actual dynamic memory
 
@@ -60,9 +79,11 @@ def finish_initialization():
 
     global memory_spans_all, total_bytes_all
     global memory_spans_unprotected, total_bytes_unprotected
+    global memory_spans_factory_reset, total_bytes_factory_reset
     memory_spans_all, total_bytes_all = _compute_spans(bit_memory_registry.keys() | byte_memory_registry.keys())
     memory_spans_unprotected, total_bytes_unprotected = _compute_spans(bit_memory_registry.keys() | (
             addr for addr, mmc in byte_memory_registry.items() if not mmc.pin_protected))
+    memory_spans_factory_reset, total_bytes_factory_reset = _compute_spans(factory_reset_memory_registry.keys())
 
     set_default_values()
 
@@ -123,8 +144,12 @@ def _get_appropriate_spans(pin_protected=None):
         return memory_spans_unprotected, total_bytes_unprotected
 
 
-def write_from_memory_map(port, controller: ThreadController):
+def write_from_memory_map(port, controller: ThreadController, do_factory_reset: bool):
+    log.debug(f'do_factory_reset={do_factory_reset}')
     memory_spans, total_bytes = _get_appropriate_spans()
+    if do_factory_reset:
+        memory_spans = itertools.chain(memory_spans, memory_spans_factory_reset)
+        total_bytes += total_bytes_factory_reset
     write_bytes = 0
     for start, end in memory_spans:
         msg = Message(0, start, [memory_map[i] for i in range(start, end)])
@@ -171,23 +196,34 @@ def memory_map_from_str(s):
 def register_bit(control, address: int, bit: int):
     assert control is not None
     assert 0 <= bit < 8
-    other = byte_memory_registry.get(address)
-    assert not other, f'{control!r} wants to use address {address}[{bit}] already used by {other!r}'
+    assert not control.is_factory_reset_only
+    assert not control.pin_protected
+
+    def assert_not_used(other):
+        assert not other, f'{control!r} wants to use address {address}[{bit}] already used by {other!r}'
+
+    assert_not_used(byte_memory_registry.get(address))
+    assert_not_used(factory_reset_memory_registry.get(address))
     bits = bit_memory_registry.setdefault(address, {})
-    other = bits.get(bit)
-    assert not other, f'{control!r} wants to use address {address}[{bit}] already used by {other!r}'
+    assert_not_used(bits.get(bit))
     bits[bit] = control
 
 
 def register_byte(control, address: int):
     assert control is not None
-    other = byte_memory_registry.get(address)
-    assert not other, f'{control!r} wants to use address {address} already used by {other!r}'
+    def assert_not_used(other):
+        assert not other, f'{control!r} wants to use address {address} already used by {other!r}'
+    assert_not_used(byte_memory_registry.get(address))
+    assert_not_used(factory_reset_memory_registry.get(address))
     bits = bit_memory_registry.get(address, None)
     if bits:
-        other = next(iter(bits.values()))
-        assert False, f'{control!r} wants to use address {address} already used by {other!r}'
-    byte_memory_registry[address] = control
+        assert_not_used(next(iter(bits.values())))
+    if control.is_factory_reset_only:
+        assert not control.pin_protected
+        assert control.is_fixed_value
+        factory_reset_memory_registry[address] = control
+    else:
+        byte_memory_registry[address] = control
 
 
 def int_from_bytes(b : bytes):
@@ -223,10 +259,13 @@ class MMC_Base:
     def __init__(self, description:str, base_address: str):
         self.base_address = base_address # for error reporting purposes
         self.description = description
-        self.pin_protected = False
         self.default_value = ''
-        self.is_fixed_value = False
         self.var: object = None
+        # allow setting these these in derived classes before calling super()
+        # because these are checked by register_byte()
+        self.__dict__.setdefault('is_fixed_value', False)
+        self.__dict__.setdefault('pin_protected', False)
+        self.__dict__.setdefault('is_factory_reset_only', False)
         controls.append(self)
 
 
@@ -364,6 +403,32 @@ class MMC_FixedByte(MMC_Bytes):
 
 
     def set_default_value(self):
+        pass
+
+
+class MMC_FactoryResetBytes(MMC_Bytes):
+    def __init__(self, address: int, values: List[int]):
+        # set these before super()
+        self.is_fixed_value = True
+        self.is_factory_reset_only = True
+        super().__init__('FactoryResetBytes', range(address, address + len(values)))
+        self.values = values
+
+
+    def to_memory_map(self):
+        self.to_memory_map_raw(self.values)
+
+    # No-ops
+
+    def from_memory_map(self):
+        pass
+
+
+    def set_default_value(self):
+        pass
+
+
+    def make_control_readonly(self):
         pass
 
 
