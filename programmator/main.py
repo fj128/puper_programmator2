@@ -1,5 +1,6 @@
 import re, string, threading, queue, time, traceback, functools
 from contextlib import contextmanager
+import enum
 
 import tkinter as tk
 from tkinter import filedialog
@@ -17,6 +18,12 @@ from programmator.progress_window import ProgressWindow
 from programmator.comms import ThreadController
 from programmator import panel, device_memory
 from programmator.pinmanager import pinmanager
+
+
+class State(enum.IntEnum):
+    NotConnected = 1
+    Connected = 2
+    MemoryRead = 3
 
 
 class Application:
@@ -52,6 +59,7 @@ class Application:
         # also log to stderr (unsynchronized at the IO level, but should be OK)
         stderr_handler = logging.StreamHandler()
         stderr_handler.setLevel(logging.DEBUG)
+        stderr_handler.setFormatter(formatter)
         root_logger.addHandler(stderr_handler)
 
 
@@ -59,6 +67,7 @@ class Application:
 
         tk_center_window(self.root, True)
 
+        self.set_state(State.NotConnected)
         self.port_monitor = PortMonitor(self.on_connection_status_changed)
         self.start_scanning_ports()
 
@@ -117,17 +126,21 @@ class Application:
         # tabs.select(tabs.index(tk.END) - 1)
 
 
+    def set_state(self, state: State):
+        def configure(button, enabled: bool):
+            button.configure(state=(tk.NORMAL if enabled else tk.DISABLED))
+
+        configure(self.button_read, state >= State.Connected)
+        configure(self.button_write, state >= State.MemoryRead)
+        configure(self.button_reset, state >= State.MemoryRead)
+        configure(self.button_loadfile, state >= State.MemoryRead)
+        configure(self.button_savefile, state >= State.MemoryRead)
+
+
     def on_connection_status_changed(self, connected: bool):
         if self.stopping:
             return
-        if connected:
-            self.button_read.configure(state=tk.NORMAL)
-            self.button_write.configure(state=tk.NORMAL)
-            self.button_compare.configure(state=tk.DISABLED)
-        else:
-            self.button_read.configure(state=tk.DISABLED)
-            self.button_write.configure(state=tk.DISABLED)
-            self.button_compare.configure(state=tk.DISABLED)
+        self.set_state(State.Connected if connected else State.NotConnected)
 
 
     def log(self, s):
@@ -238,6 +251,7 @@ class Application:
             log.info('Загрузка данных в интерфейс')
             device_memory.populate_controls_from_memory_map()
             self.is_after_factory_reset = False
+            self.set_state(State.MemoryRead)
             log.info(f'Настройки считаны из устройства')
 
 

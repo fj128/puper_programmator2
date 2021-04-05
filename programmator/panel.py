@@ -5,7 +5,7 @@ from tkinter.font import Font
 from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth, enumerate_first_last
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
     MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes,
-    MMC_Phone, MMC_FactoryResetBytes, make_fixed_bits)
+    MMC_Phone, MMC_FactoryResetBytes, MMC_ControlSum, make_fixed_bits)
 from programmator.pinmanager import pinmanager
 
 import logging
@@ -73,6 +73,12 @@ def create_widgets(tabs):
     # Master key + user codes, for Communicator panel
     MMC_FactoryResetBytes(560, [0x11] * 8 + [0xFF] * 56)
 
+    # duh
+    MMC_ControlSum(1012)
+
+    # 3 device state bytes
+    MMC_FactoryResetBytes(1021, [0x00] * 3)
+
     def add_tab(name: str, header=''):
         page = ttk.Frame(tabs)
 
@@ -99,7 +105,7 @@ def create_widgets(tabs):
     make_fixed_bits(2, range(1, 8))
 
     ctrl = MMC_Choice(page, 'Тип контрольной панели', 3, [2, 1, 0], {
-        0: 'Коммуникатор',
+        0: 'Клавиатура',
         1: 'DALLAS',
         2: 'RING/TIP',
         3: 'MAGELLAN',
@@ -336,8 +342,8 @@ def create_widgets(tabs):
         grid_label_and_control_mmc(ctrl)
 
         ctrl = MMC_Choice(frame, 'Тип выхода', bitmap_addr, [0], {
-            0: 'Нормально замкнут',
             1: 'Нормально разомкнут',
+            0: 'Нормально замкнут',
             })
         grid_label_and_control_mmc(ctrl)
 

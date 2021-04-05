@@ -1,6 +1,7 @@
 from typing import Union, List, Dict, Tuple, Sequence, Any, Iterable
 import functools
 import tkinter as tk
+from dataclasses import dataclass
 import re
 import itertools
 
@@ -34,22 +35,31 @@ bit_memory_registry: 'Dict[int, Dict[int, MMC_Base]]' = {}
 byte_memory_registry: 'Dict[int, MMC_Base]' = {}
 factory_reset_memory_registry: 'Dict[int, MMC_Base]' = {}
 
-memory_spans_all: List[Tuple[int, int]] = []
-memory_spans_unlocked: List[Tuple[int, int]] = []
-memory_spans_factory_reset: List[Tuple[int, int]] = []
-total_bytes_all = 0
-total_bytes_unlocked = 0
-total_bytes_factory_reset = 0
 
-# actual dynamic memory
+@dataclass
+class MemorySpans:
+    spans: List[Tuple[int, int]]
+    total_bytes: int
 
+# actually full memory
+memory_spans_read: MemorySpans
+# what we are writing when correct pin was not entered
+memory_spans_write: MemorySpans
+# what we are writing with correct/unset pin (includes memory_spans_write)
+memory_spans_write_pin_protected: MemorySpans
+# these are used **in addition** to memory_spans_write_* to reset some extra values
+memory_spans_factory_reset: MemorySpans
+
+# actual dynamic memory.
 memory_map: Dict[int, int] = {}
 
+# A pseudo-mmc for the control sum of the currently first 1012 bytes of memory.
+mmc_control_sum = None
 
 # API
 
-def _compute_spans(addresses):
-    spans = []
+def _compute_spans(addresses: Iterable[int]) -> MemorySpans:
+    spans: List[Tuple[int, int]] = []
     start = None
     prev = None
     page_mask = 0xFF80
@@ -65,9 +75,11 @@ def _compute_spans(addresses):
             start = prev = addr
         else:
             prev = addr
+    assert start is not None
+    assert prev is not None
     spans.append((start, prev + 1))
     total_bytes = sum(end - start for start, end in spans)
-    return spans, total_bytes
+    return MemorySpans(spans, total_bytes)
 
 
 def finish_initialization():
@@ -77,13 +89,16 @@ def finish_initialization():
             print(bits)
             assert False, f'Incomplete byte at {address}'
 
-    global memory_spans_all, total_bytes_all
-    global memory_spans_unprotected, total_bytes_unprotected
-    global memory_spans_factory_reset, total_bytes_factory_reset
-    memory_spans_all, total_bytes_all = _compute_spans(bit_memory_registry.keys() | byte_memory_registry.keys())
-    memory_spans_unprotected, total_bytes_unprotected = _compute_spans(bit_memory_registry.keys() | (
+    global memory_spans_read
+    global memory_spans_write_unprotected
+    global memory_spans_write_pin_protected
+    global memory_spans_write_factory_reset
+    # technically we only need to read 1012 bytes for computing control sum but also PIN, so just read all
+    memory_spans_read = _compute_spans(range(1024))
+    memory_spans_write_pin_protected = _compute_spans(bit_memory_registry.keys() | byte_memory_registry.keys())
+    memory_spans_write_unprotected = _compute_spans(bit_memory_registry.keys() | (
             addr for addr, mmc in byte_memory_registry.items() if not mmc.pin_protected))
-    memory_spans_factory_reset, total_bytes_factory_reset = _compute_spans(factory_reset_memory_registry.keys())
+    memory_spans_write_factory_reset = _compute_spans(factory_reset_memory_registry.keys())
 
     set_default_values()
 
@@ -93,7 +108,7 @@ def read_into_memory_map(port, controller: ThreadController):
     memory_map.clear()
     with timeit_block('Reading device memory'):
         read_bytes = 0
-        for start, end in memory_spans_all:
+        for start, end in memory_spans_read.spans:
             msg = Message(1, start, [0] * (end - start))
             resp = send_receive(port, msg, controller)
             if resp is None:
@@ -102,7 +117,7 @@ def read_into_memory_map(port, controller: ThreadController):
             for i, b in enumerate(resp.data):
                 memory_map[start + i] = b
             read_bytes += end - start
-            controller.report_progress(read_bytes, total_bytes_all)
+            controller.report_progress(read_bytes, memory_spans_read.total_bytes)
         return True
 
 
@@ -120,10 +135,13 @@ def populate_controls_from_memory_map():
 
 def populate_memory_map_from_controls():
     from programmator.pinmanager import pinmanager
-    memory_map.clear()
+    # don't clear existing memory_map, we need it for the control sum.
     for control in controls:
         if pinmanager.can_access_pin_protected or not control.pin_protected:
             control.to_memory_map()
+    # calculate and submit control sum
+    mmc_control_sum.value = sum(memory_map[i] for i in range(mmc_control_sum.address))
+    mmc_control_sum.to_memory_map()
     return True
 
 
@@ -139,31 +157,41 @@ def _get_appropriate_spans(pin_protected=None):
     if pin_protected is None:
         pin_protected = pinmanager.can_access_pin_protected
     if pin_protected:
-        return memory_spans_all, total_bytes_all
+        return memory_spans_write_pin_protected
     else:
-        return memory_spans_unprotected, total_bytes_unprotected
+        return memory_spans_write_unprotected
 
 
 def write_from_memory_map(port, controller: ThreadController, do_factory_reset: bool):
     log.debug(f'do_factory_reset={do_factory_reset}')
-    memory_spans, total_bytes = _get_appropriate_spans()
+    _spans = _get_appropriate_spans()
+    memory_spans, total_bytes = _spans.spans, _spans.total_bytes
+    total_bytes += 2 # control sum
     if do_factory_reset:
-        memory_spans = itertools.chain(memory_spans, memory_spans_factory_reset)
-        total_bytes += total_bytes_factory_reset
+        memory_spans = itertools.chain(memory_spans, memory_spans_factory_reset.spans)
+        total_bytes += memory_spans_factory_reset.total_bytes
+
     write_bytes = 0
-    for start, end in memory_spans:
-        msg = Message(0, start, [memory_map[i] for i in range(start, end)])
+    def write(start, data):
+        nonlocal write_bytes
+        msg = Message(0, start, data)
         resp = send_receive(port, msg, controller)
         if resp is None:
-            memory_map.clear()
             return False
-        write_bytes += end - start
+        write_bytes += len(data)
         controller.report_progress(write_bytes, total_bytes)
+        return True
+
+    for start, end in memory_spans:
+        if not write(start, [memory_map[i] for i in range(start, end)]):
+            return False
+
+
     return True
 
 
 def memory_map_to_str(pin_protected):
-    memory_spans, _ = _get_appropriate_spans(pin_protected)
+    memory_spans = _get_appropriate_spans(pin_protected).spans
     res = ['v0.0.19', str(int(pin_protected))]
     for start, end in memory_spans:
         s = ' '.join(f'{memory_map[i]:02X}' for i in range(start, end))
@@ -177,7 +205,7 @@ def memory_map_from_str(s):
     assert version == 'v0.0.19'
     pin_protected = bool(int(next(line_iter)))
 
-    memory_spans, _ = _get_appropriate_spans(pin_protected)
+    memory_spans = _get_appropriate_spans(pin_protected).spans
 
     memory_map.clear()
     for start, end in memory_spans:
@@ -429,6 +457,30 @@ class MMC_FactoryResetBytes(MMC_Bytes):
 
 
     def make_control_readonly(self):
+        pass
+
+
+class MMC_ControlSum(MMC_Bytes):
+    def __init__(self, address):
+        super().__init__('ControlSum', range(address, address + 2))
+        self.address = address
+        self.value = 0
+
+        global mmc_control_sum
+        assert mmc_control_sum is None
+        mmc_control_sum = self
+
+
+    def to_memory_map(self):
+        self.to_memory_map_raw([(self.value >> 8) & 0xFF, self.value & 0xFF])
+
+    # No-ops
+
+    def from_memory_map(self):
+        pass
+
+
+    def set_default_value(self):
         pass
 
 
