@@ -1,4 +1,4 @@
-import re, string, threading, queue, time, traceback, functools
+import sys, re, string, threading, queue, time, traceback, functools
 from contextlib import contextmanager
 import enum
 
@@ -18,12 +18,6 @@ from programmator.progress_window import ProgressWindow
 from programmator.comms import ThreadController
 from programmator import panel, device_memory
 from programmator.pinmanager import pinmanager
-
-
-class State(enum.IntEnum):
-    NotConnected = 1
-    Connected = 2
-    MemoryRead = 3
 
 
 class Application:
@@ -57,7 +51,7 @@ class Application:
         root_logger.addHandler(self.log_handler)
 
         # also log to stderr (unsynchronized at the IO level, but should be OK)
-        stderr_handler = logging.StreamHandler()
+        stderr_handler = logging.StreamHandler(sys.stdout)
         stderr_handler.setLevel(logging.DEBUG)
         stderr_handler.setFormatter(formatter)
         root_logger.addHandler(stderr_handler)
@@ -67,7 +61,7 @@ class Application:
 
         tk_center_window(self.root, True)
 
-        self.set_state(State.NotConnected)
+        self.on_connection_status_changed(False)
         self.port_monitor = PortMonitor(self.on_connection_status_changed)
         self.start_scanning_ports()
 
@@ -93,7 +87,7 @@ class Application:
         self.button_write = tk.Button(button_panel, text='Записать', command=self.cmd_write, state=tk.DISABLED)
         self.button_write.pack(side=tk.LEFT)
 
-        self.button_reset = tk.Button(button_panel, text='Сбросить', command=self.cmd_reset)
+        self.button_reset = tk.Button(button_panel, text='Фабричные установки', command=self.cmd_reset)
         self.button_reset.pack(side=tk.LEFT)
 
         self.button_loadfile = tk.Button(button_panel, text='Из файла', command=self.cmd_loadfile)
@@ -126,21 +120,21 @@ class Application:
         # tabs.select(tabs.index(tk.END) - 1)
 
 
-    def set_state(self, state: State):
-        def configure(button, enabled: bool):
-            button.configure(state=(tk.NORMAL if enabled else tk.DISABLED))
-
-        configure(self.button_read, state >= State.Connected)
-        configure(self.button_write, state >= State.MemoryRead)
-        configure(self.button_reset, state >= State.MemoryRead)
-        configure(self.button_loadfile, state >= State.MemoryRead)
-        configure(self.button_savefile, state >= State.MemoryRead)
-
-
     def on_connection_status_changed(self, connected: bool):
         if self.stopping:
             return
-        self.set_state(State.Connected if connected else State.NotConnected)
+        log.debug(f'connection status changed, connected={connected}')
+        # forget device memory after swapping devices!
+        device_memory.memory_map.clear()
+
+        def configure(button, enabled: bool):
+            button.configure(state=(tk.NORMAL if enabled else tk.DISABLED))
+
+        configure(self.button_read, connected)
+        configure(self.button_write, connected)
+        configure(self.button_reset, connected)
+        configure(self.button_loadfile, connected)
+        configure(self.button_savefile, connected)
 
 
     def log(self, s):
@@ -242,6 +236,7 @@ class Application:
             self.progress_window = None
 
 
+
     def cmd_read(self):
         if not self.port_monitor.port:
             log.error('Not connected')
@@ -251,7 +246,6 @@ class Application:
             log.info('Загрузка данных в интерфейс')
             device_memory.populate_controls_from_memory_map()
             self.is_after_factory_reset = False
-            self.set_state(State.MemoryRead)
             log.info(f'Настройки считаны из устройства')
 
 
@@ -260,11 +254,17 @@ class Application:
             log.error('Not connected')
             return
         try:
+            if not device_memory.memory_map:
+                # So I tried reusing the same ProgressWindow for reading and writing and it's a
+                # colossal pain in the ass because now I had to manage its lifetime from a lot of
+                # places, make sure we don't log to deleted self.progress_window etc.
+                if not self.readwrite_in_thread('Предварительное считывание', device_memory.read_into_memory_map):
+                    return
+
             log.info('Выгрузка данных из интерфейса в образ памяти')
             if device_memory.populate_memory_map_from_controls():
                 # read back rounded values
                 device_memory.populate_controls_from_memory_map()
-                log.info('Запись в память устройства')
                 op = functools.partial(device_memory.write_from_memory_map, do_factory_reset=self.is_after_factory_reset)
                 self.readwrite_in_thread('Запись', op)
                 # don't change "is_after_factory_reset" to allow setting up multiple devices
@@ -276,6 +276,7 @@ class Application:
 
     def cmd_reset(self):
         device_memory.set_default_values()
+        pinmanager.clear_pin()
         self.is_after_factory_reset = True
         log.info(f'Настройки сброшены')
 

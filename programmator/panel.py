@@ -74,7 +74,7 @@ def create_widgets(tabs):
     MMC_FactoryResetBytes(560, [0x11] * 8 + [0xFF] * 56)
 
     # duh
-    MMC_ControlSum(1012)
+    MMC_ControlSum()
 
     # 3 device state bytes
     MMC_FactoryResetBytes(1021, [0x00] * 3)
