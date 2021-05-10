@@ -41,7 +41,7 @@ class MemorySpans:
     spans: List[Tuple[int, int]]
     total_bytes: int
 
-# actually full memory
+# what we are reading
 memory_spans_read: MemorySpans
 # what we are writing when correct pin was not entered
 memory_spans_write: MemorySpans
@@ -53,8 +53,6 @@ memory_spans_write_factory_reset: MemorySpans
 # actual dynamic memory.
 memory_map: Dict[int, int] = {}
 
-# A pseudo-mmc for the control sum of the currently first 1012 bytes of memory.
-mmc_control_sum = None
 
 # API
 
@@ -93,8 +91,9 @@ def finish_initialization():
     global memory_spans_write_unprotected
     global memory_spans_write_pin_protected
     global memory_spans_write_factory_reset
-    # technically we only need to read 1012 bytes for computing control sum but also PIN, so just read all
-    memory_spans_read = _compute_spans(range(1024))
+    # currently memory_spans_read and memory_spans_write_pin_protected are the same, I use a
+    # separate name in case I need to compute control sum or something like that again.
+    memory_spans_read = _compute_spans(bit_memory_registry.keys() | byte_memory_registry.keys())
     memory_spans_write_pin_protected = _compute_spans(bit_memory_registry.keys() | byte_memory_registry.keys())
     memory_spans_write_unprotected = _compute_spans(bit_memory_registry.keys() | (
             addr for addr, mmc in byte_memory_registry.items() if not mmc.pin_protected))
@@ -135,14 +134,10 @@ def populate_controls_from_memory_map():
 
 def populate_memory_map_from_controls():
     from programmator.pinmanager import pinmanager
-    # don't clear existing memory_map, we need it for the control sum.
+    memory_map.clear()
     for control in controls:
         if pinmanager.can_access_pin_protected or not control.pin_protected:
             control.to_memory_map()
-    # calculate and submit control sum
-    mmc_control_sum.value = sum(memory_map[i] for i in range(1011))
-    # fun fact, control sum itself is stored at 1012, 1013, so 1011 is not included.
-    mmc_control_sum.to_memory_map()
     return True
 
 
@@ -167,7 +162,6 @@ def write_from_memory_map(port, controller: ThreadController, do_factory_reset: 
     log.debug(f'do_factory_reset={do_factory_reset}')
     _spans = _get_appropriate_spans()
     memory_spans, total_bytes = _spans.spans, _spans.total_bytes
-    total_bytes += 2 # control sum
     if do_factory_reset:
         memory_spans = itertools.chain(memory_spans, memory_spans_write_factory_reset.spans)
         total_bytes += memory_spans_write_factory_reset.total_bytes
@@ -458,29 +452,6 @@ class MMC_FactoryResetBytes(MMC_Bytes):
 
 
     def make_control_readonly(self):
-        pass
-
-
-class MMC_ControlSum(MMC_Bytes):
-    def __init__(self):
-        super().__init__('ControlSum', [1012, 1013])
-        self.value = 0
-
-        global mmc_control_sum
-        assert mmc_control_sum is None
-        mmc_control_sum = self
-
-
-    def to_memory_map(self):
-        self.to_memory_map_raw([(self.value >> 8) & 0xFF, self.value & 0xFF])
-
-    # No-ops
-
-    def from_memory_map(self):
-        pass
-
-
-    def set_default_value(self):
         pass
 
 

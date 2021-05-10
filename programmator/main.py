@@ -51,7 +51,7 @@ class Application:
         root_logger.addHandler(self.log_handler)
 
         # also log to stderr (unsynchronized at the IO level, but should be OK)
-        stderr_handler = logging.StreamHandler(sys.stdout)
+        stderr_handler = logging.StreamHandler(sys.stderr)
         stderr_handler.setLevel(logging.DEBUG)
         stderr_handler.setFormatter(formatter)
         root_logger.addHandler(stderr_handler)
@@ -254,13 +254,6 @@ class Application:
             log.error('Not connected')
             return
         try:
-            if not device_memory.memory_map:
-                # So I tried reusing the same ProgressWindow for reading and writing and it's a
-                # colossal pain in the ass because now I had to manage its lifetime from a lot of
-                # places, make sure we don't log to deleted self.progress_window etc.
-                if not self.readwrite_in_thread('Предварительное считывание', device_memory.read_into_memory_map):
-                    return
-
             log.info('Выгрузка данных из интерфейса в образ памяти')
             if device_memory.populate_memory_map_from_controls():
                 # read back rounded values
@@ -328,7 +321,8 @@ class Application:
 
 
     def cmd_unbrick(self):
-        self.cmd_write()
+        # here I used to put custom one-time code.
+        assert False
 
 
     def run(self):
@@ -341,7 +335,6 @@ def main():
     set_high_DPI_awareness()
     app = Application()
     app.run()
-
 
 
 if __name__ == '__main__':
