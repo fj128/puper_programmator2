@@ -102,12 +102,13 @@ def create_widgets(tabs):
     make_fixed_bits(2, range(1, 8))
 
     ctrl = MMC_Choice(page, 'Тип контрольной панели', 3, [2, 1, 0], {
-        0: 'Клавиатура',
+        0: 'Коммуникатор',
         1: 'DALLAS',
         2: 'RING/TIP',
         3: 'MAGELLAN',
         4: 'SECOLINK',
         5: 'ESPRIT',
+        6: 'Клавиатура',
         })
     grid_label_and_control_mmc(ctrl)
 
