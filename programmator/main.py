@@ -18,6 +18,7 @@ from programmator.progress_window import ProgressWindow
 from programmator.comms import ThreadController
 from programmator import panel, device_memory
 from programmator.pinmanager import pinmanager
+from programmator.version import __version__
 
 
 class Application:
@@ -56,8 +57,9 @@ class Application:
         stderr_handler.setFormatter(formatter)
         root_logger.addHandler(stderr_handler)
 
-
         tk.Tk.report_callback_exception = self.report_callback_exception
+
+        log.info(self.root.title())
 
         tk_center_window(self.root, True)
 
@@ -70,7 +72,7 @@ class Application:
         frame = self.frame = tk.Frame(root)
         root = self.root = self.frame.master
 
-        root.title('Puper Programmator')
+        root.title('Puper Programmator ' + __version__)
         root.grid_rowconfigure(0, weight=1)
         root.grid_columnconfigure(0, weight=1)
         frame.grid(sticky='nesw')
