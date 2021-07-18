@@ -96,6 +96,10 @@ def create_widgets(tabs):
 
     page = add_tab('Настройки', 'Основные настройки')
 
+    ctrl = MMC_Int(page, 'Версия коммуникатора', [1011, 1010])
+    grid_label_and_control_mmc(ctrl)
+    ctrl.mmc.make_control_readonly() # writing a version is OK?
+
     ctrl = MMC_BCD(page, 'Номер коммуникатора', 0, 4)
     grid_label_and_control_mmc(ctrl)
 
@@ -193,16 +197,15 @@ def create_widgets(tabs):
     SIM(1, 163)
     SIM(2, 204)
 
+    MMC_FixedBit(3, 3)
+
     name = 'Основной IP:port'
-    ctrl1 = tk.Checkbutton(page, text=name)
-    ctrl1.select()
-    ctrl1.configure(state=tk.DISABLED)
+    ctrl1 = MMC_Checkbutton(page, name, 3, 4)
     ctrl2 = MMC_IP_Port(page, name, 142)
     grid_control_and_control(ctrl1, ctrl2, kwargs1=dict(sticky='w'))
+    pin_protected_controls.append(ctrl1)
     pin_protected_controls.append(ctrl2)
 
-    MMC_FixedBit(3, 3)
-    MMC_FixedBit(3, 4, 1)
     name = 'Резервный IP:port'
     ctrl1 = MMC_Checkbutton(page, name, 3, 5)
     ctrl2 = MMC_IP_Port(page, name, 183)
@@ -333,10 +336,17 @@ def create_widgets(tabs):
 
         make_fixed_bits(bitmap_addr, [6, 3, 2])
 
-        ctrl = MMC_Choice(frame, 'Режим работы', bitmap_addr, [1], {
-            0: 'Потенциальный',
-            1: 'Импульсный',
-            })
+        if i == 0:
+            ctrl = MMC_Choice(frame, 'Режим работы', bitmap_addr, [1], {
+                1: 'Импульсный',
+                })
+            ctrl.mmc.is_fixed_value = True
+        else:
+            ctrl = MMC_Choice(frame, 'Режим работы', bitmap_addr, [1], {
+                0: 'Потенциальный',
+                1: 'Импульсный',
+                })
+
         grid_label_and_control_mmc(ctrl)
 
         ctrl = MMC_Choice(frame, 'Тип выхода', bitmap_addr, [0], {
@@ -345,12 +355,13 @@ def create_widgets(tabs):
             })
         grid_label_and_control_mmc(ctrl)
 
-        # только в импульсный режим
-        ctrl = MMC_Time(frame, 'Длительность при постановке (сек)', base_addr + 0)
-        grid_label_and_control_mmc(ctrl)
+        if i == 0:
+            # TODO: только в импульсном режиме?
+            ctrl = MMC_Time(frame, 'Длительность при постановке (сек)', base_addr + 0)
+            grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_Time(frame, 'Длительность при снятии (сек)', base_addr + 1)
-        grid_label_and_control_mmc(ctrl)
+            ctrl = MMC_Time(frame, 'Длительность при снятии (сек)', base_addr + 1)
+            grid_label_and_control_mmc(ctrl)
 
         ctrl = MMC_Time(frame, 'Длительность при срабатывании (сек)', base_addr + 2)
         grid_label_and_control_mmc(ctrl)

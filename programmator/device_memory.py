@@ -512,6 +512,10 @@ class MMC_Choice(MMC_Bits):
         self.to_memory_map_raw(self.options_str_to_bin[self.var.get()])
 
 
+    def make_control_readonly(self):
+        self.control.configure(state='disabled')
+
+
 @return_wrapped_control
 class MMC_Int(MMC_Bytes):
     def __init__(self, parent, text: str, addresses: List[int]):

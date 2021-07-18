@@ -10,13 +10,14 @@ if sys.platform == "win32":
 
 
 setup(  name = 'puper_programmator2',
-        version = re.sub('[^0-9.]', '', __version__),
+        version = re.sub('[^0-9.]', '', __version__), # windows is upset with non 12.34.56 versions.
         description = 'Programmator!',
         options = {
             'build_exe': {
                 # put everything into library.zip
                 'zip_include_packages': '*',
                 'zip_exclude_packages': [],
+                # provide version in the BUILD_CONSTANTS module
                 'constants': [f'version="{__version__}"'],
             },
             'bdist_msi': {
