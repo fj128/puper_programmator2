@@ -7,6 +7,8 @@ import itertools
 
 from programmator.utils import tk_set_list_maxwidth, pretty_hexlify, timeit_block
 from programmator.comms import send_receive, Message, ThreadController
+from programmator.asmparser import load_factory_settings
+
 
 import logging
 log = logging.getLogger(__name__)
@@ -20,20 +22,11 @@ We don't always read/write all memory. We have pin-protected areas that we read 
 we have a valid pin. Both are stored in byte_memory_registry and are used to produce
 memory_spans_all and memory_spans_unlocked.
 
-Additionally there's a separate factory_reset_memory_registry and the derived
-memory_spans_factory_reset that contain only controls that are not read and are written only after
-factory reset (and not after loading from the device or file). I thought about rewriting the code to
-use byte_memory_registry_pin_protected etc in the similar fashion but decided that the functionality
-is different enough that it's not worth it, for example factory reset stuff is used only in
-write_from_memory_map() and supporting it in a generic _get_appropriate_spans will complicate things
-for no good reason.
-
-bit_memory_registry doesn't support pin-protected/factory-reset memory.
+bit_memory_registry doesn't support pin-protected memory.
 '''
 
 bit_memory_registry: 'Dict[int, Dict[int, MMC_Base]]' = {}
 byte_memory_registry: 'Dict[int, MMC_Base]' = {}
-factory_reset_memory_registry: 'Dict[int, MMC_Base]' = {}
 
 
 @dataclass
@@ -47,12 +40,13 @@ memory_spans_read: MemorySpans
 memory_spans_write: MemorySpans
 # what we are writing with correct/unset pin (includes memory_spans_write)
 memory_spans_write_pin_protected: MemorySpans
-# these are used **in addition** to memory_spans_write_* to reset some extra values
+# Spans for the factory reset image, ideally cover the entire memory.
 memory_spans_write_factory_reset: MemorySpans
 
 # actual dynamic memory.
 memory_map: Dict[int, int] = {}
 
+memory_map_factory_reset: Dict[int, int] = {}
 
 # API
 
@@ -87,17 +81,20 @@ def finish_initialization():
             print(bits)
             assert False, f'Incomplete byte at {address}'
 
+    global memory_map_factory_reset
     global memory_spans_read
     global memory_spans_write_unprotected
     global memory_spans_write_pin_protected
     global memory_spans_write_factory_reset
+
+    memory_map_factory_reset = load_factory_settings()
     # currently memory_spans_read and memory_spans_write_pin_protected are the same, I use a
     # separate name in case I need to compute control sum or something like that again.
     memory_spans_read = _compute_spans(bit_memory_registry.keys() | byte_memory_registry.keys())
     memory_spans_write_pin_protected = _compute_spans(bit_memory_registry.keys() | byte_memory_registry.keys())
     memory_spans_write_unprotected = _compute_spans(bit_memory_registry.keys() | (
             addr for addr, mmc in byte_memory_registry.items() if not mmc.pin_protected))
-    memory_spans_write_factory_reset = _compute_spans(factory_reset_memory_registry.keys())
+    memory_spans_write_factory_reset = _compute_spans(memory_map_factory_reset)
 
     set_default_values()
 
@@ -142,10 +139,17 @@ def populate_memory_map_from_controls():
 
 
 def set_default_values():
-    for control in controls:
-        control.set_default_value()
-        if control.is_fixed_value:
-            control.make_control_readonly()
+    global memory_map
+    original_memory_map = memory_map
+    try:
+        memory_map = memory_map_factory_reset
+        for control in controls:
+            control.set_default_value()
+            control.from_memory_map()
+            if control.is_fixed_value:
+                control.make_control_readonly()
+    finally:
+        memory_map = original_memory_map
 
 
 def _get_appropriate_spans(pin_protected=None):
@@ -159,12 +163,14 @@ def _get_appropriate_spans(pin_protected=None):
 
 
 def write_from_memory_map(port, controller: ThreadController, do_factory_reset: bool):
-    log.debug(f'do_factory_reset={do_factory_reset}')
-    _spans = _get_appropriate_spans()
-    memory_spans, total_bytes = _spans.spans, _spans.total_bytes
     if do_factory_reset:
-        memory_spans = itertools.chain(memory_spans, memory_spans_write_factory_reset.spans)
-        total_bytes += memory_spans_write_factory_reset.total_bytes
+        spans = memory_spans_write_factory_reset
+        l_memory_map = memory_map_factory_reset
+    else:
+        spans = _get_appropriate_spans()
+        l_memory_map = memory_map
+
+    memory_spans, total_bytes = spans.spans, spans.total_bytes
 
     write_bytes = 0
     def write(start, data):
@@ -178,9 +184,8 @@ def write_from_memory_map(port, controller: ThreadController, do_factory_reset: 
         return True
 
     for start, end in memory_spans:
-        if not write(start, [memory_map[i] for i in range(start, end)]):
+        if not write(start, [l_memory_map[i] for i in range(start, end)]):
             return False
-
 
     return True
 
@@ -226,7 +231,6 @@ def register_bit(control, address: int, bit: int):
         assert not other, f'{control!r} wants to use address {address}[{bit}] already used by {other!r}'
 
     assert_not_used(byte_memory_registry.get(address))
-    assert_not_used(factory_reset_memory_registry.get(address))
     bits = bit_memory_registry.setdefault(address, {})
     assert_not_used(bits.get(bit))
     bits[bit] = control
@@ -237,14 +241,12 @@ def register_byte(control, address: int):
     def assert_not_used(other):
         assert not other, f'{control!r} wants to use address {address} already used by {other!r}'
     assert_not_used(byte_memory_registry.get(address))
-    assert_not_used(factory_reset_memory_registry.get(address))
     bits = bit_memory_registry.get(address, None)
     if bits:
         assert_not_used(next(iter(bits.values())))
     if control.is_factory_reset_only:
         assert not control.pin_protected
         assert control.is_fixed_value
-        factory_reset_memory_registry[address] = control
     else:
         byte_memory_registry[address] = control
 
@@ -605,7 +607,7 @@ class MMC_BCD(MMC_Bytes):
 
     def digit_to_char(self, d):
         if not 0 <= d <= 9:
-            raise Exception(f'{self}: недесятичная цифра в данных: {pretty_hexlify(val)}')
+            raise Exception(f'{self}: недесятичная цифра в данных: {pretty_hexlify(d)}')
         return str(d)
 
 

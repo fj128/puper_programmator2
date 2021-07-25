@@ -26,7 +26,6 @@ class Application:
         self.buffer_line_count = 2000
         self.stopping = False
         self.progress_window = None
-        self.is_after_factory_reset = True
 
         self.create_widgets(root)
 
@@ -89,13 +88,16 @@ class Application:
         self.button_write = tk.Button(button_panel, text='Записать', command=self.cmd_write, state=tk.DISABLED)
         self.button_write.pack(side=tk.LEFT)
 
-        self.button_reset = tk.Button(button_panel, text='Фабричные установки', command=self.cmd_reset)
+        self.button_reset = tk.Button(button_panel, text='Сбросить', command=self.cmd_reset)
         self.button_reset.pack(side=tk.LEFT)
 
         self.button_loadfile = tk.Button(button_panel, text='Из файла', command=self.cmd_loadfile)
         self.button_loadfile.pack(side=tk.LEFT, padx=(5, 0))
 
         self.button_savefile = tk.Button(button_panel, text='Сохранить', command=self.cmd_savefile)
+        self.button_savefile.pack(side=tk.LEFT)
+
+        self.button_savefile = tk.Button(button_panel, text='Записать фабричные настройки', command=self.cmd_write_factory_settings)
         self.button_savefile.pack(side=tk.LEFT)
 
         button_settings = tk.Button(button_panel, text='Настройки', state=tk.DISABLED)
@@ -247,7 +249,6 @@ class Application:
             pinmanager.check_pin(self.root)
             log.info('Загрузка данных в интерфейс')
             device_memory.populate_controls_from_memory_map()
-            self.is_after_factory_reset = False
             log.info(f'Настройки считаны из устройства')
 
 
@@ -260,9 +261,8 @@ class Application:
             if device_memory.populate_memory_map_from_controls():
                 # read back rounded values
                 device_memory.populate_controls_from_memory_map()
-                op = functools.partial(device_memory.write_from_memory_map, do_factory_reset=self.is_after_factory_reset)
+                op = functools.partial(device_memory.write_from_memory_map)
                 self.readwrite_in_thread('Запись', op)
-                # don't change "is_after_factory_reset" to allow setting up multiple devices
         except Exception as exc:
             log.error(exc)
             raise # tkinter will print it to stdout
@@ -272,8 +272,26 @@ class Application:
     def cmd_reset(self):
         device_memory.set_default_values()
         pinmanager.clear_pin()
-        self.is_after_factory_reset = True
         log.info(f'Настройки сброшены')
+
+
+    def cmd_write_factory_settings(self):
+        if not self.port_monitor.port:
+            log.error('Not connected')
+            return
+        try:
+            log.info('Запись фабричных настроек')
+            op = functools.partial(device_memory.write_from_memory_map, do_factory_reset=True)
+            self.readwrite_in_thread('Запись', op)
+            if self.readwrite_in_thread('Считывание', device_memory.read_into_memory_map):
+                pinmanager.check_pin(self.root)
+                log.info('Загрузка данных в интерфейс')
+                device_memory.populate_controls_from_memory_map()
+                log.info(f'Настройки считаны из устройства')
+        except Exception as exc:
+            log.error(exc)
+            raise # tkinter will print it to stdout
+        log.info(f'Настройки записаны в устройство')
 
 
     def cmd_loadfile(self):
@@ -295,7 +313,6 @@ class Application:
 
         pinmanager.update_status_after_loading_file(pin_protected)
         device_memory.populate_controls_from_memory_map()
-        self.is_after_factory_reset = False
         log.info(f'Файл {file.name!r} загружен')
 
 
