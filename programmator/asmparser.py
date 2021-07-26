@@ -1,24 +1,23 @@
-import sys, re
-from importlib import resources
+import re
 from typing import List, NoReturn
 from types import MappingProxyType
 from dataclasses import dataclass, field
-import programmator
 import logging as log
+from programmator import factory_settings
 
 def load_factory_settings():
-    with resources.open_text(programmator, 'ZAVOD1.ASM') as f:
-        parsed = parse_asm(f)
-        return compute_mapping(parsed)
+    s = factory_settings.data.split('\n')
+    parsed = parse_asm(s)
+    return compute_mapping(parsed)
+
 
 ######
 
-g_file : str
 g_line_num: int
 g_orig_line: str
 
 def error(why, what=None) -> NoReturn:
-    raise Exception(f'Failed to parse {g_file}, error at line {g_line_num}: {why}'
+    raise Exception(f'Failed to parse factory settings, error at line {g_line_num}: {why}'
         + (f': {what!r}' if what is not None else ''), g_orig_line) from None
 
 
@@ -99,10 +98,9 @@ def parse_args(s: str):
     return args
 
 
-def parse_asm(file):
-    global g_file, g_line_num, g_orig_line
-    g_file = file
-    for g_line_num, g_orig_line in enumerate(file):
+def parse_asm(data):
+    global g_line_num, g_orig_line
+    for g_line_num, g_orig_line in enumerate(data):
         g_line_num += 1
         g_orig_line = g_orig_line.strip()
         line = g_orig_line.split(';', 1)[0].strip()

@@ -1,4 +1,5 @@
-;E10MA00.ASM  E10 - version EPROM  MA - PANEL MAGELAN 00 SUBVERSION FOR mAGELAN
+# I gave up on importlib.
+data = ''';E10MA00.ASM  E10 - version EPROM  MA - PANEL MAGELAN 00 SUBVERSION FOR mAGELAN
 ;MEMORY MAP
 ;06.08.2000  message groups changed to 8 in filter
 ;-------------------------------;
@@ -113,17 +114,17 @@
 
   ORG 464
   ;
-  DB  00H, 00H, 00H , 00H ;#1  PIN1  
-  DB  00H, 00H, 00H , 00H ;#2  PIN2  
-  DB  00H, 00H, 00H , 00H ;#3  PIN3  
-  DB  00H, 00H, 00H , 00H ;#4  PIN4  
-  DB  00H, 00H, 00H , 00H ;#5  PIN5  
-  DB  00H, 00H, 00H , 00H ;#6  PIN6  
+  DB  00H, 00H, 00H , 00H ;#1  PIN1
+  DB  00H, 00H, 00H , 00H ;#2  PIN2
+  DB  00H, 00H, 00H , 00H ;#3  PIN3
+  DB  00H, 00H, 00H , 00H ;#4  PIN4
+  DB  00H, 00H, 00H , 00H ;#5  PIN5
+  DB  00H, 00H, 00H , 00H ;#6  PIN6
   DB  00H, 00H, 00H , 00H ;#7  PIN7
-  DB  00H, 00H, 00H , 00H ;#8  PIN8  
-  DB  00H, 00H, 00H , 00H ;#9  PIN9  
+  DB  00H, 00H, 00H , 00H ;#8  PIN8
+  DB  00H, 00H, 00H , 00H ;#9  PIN9
   DB  00H, 00H, 00H , 00H ;#10 PBAT
-  DB  00H, 00H, 00H , 00H ;#11 P220  
+  DB  00H, 00H, 00H , 00H ;#11 P220
   DB  00H, 00H, 00H , 00H ;#12 PGM1
   DB  00H, 00H, 00H , 00H ;#13 PGM2
   ;464 + 13x4  = 516
@@ -172,9 +173,9 @@
 ; DALLAS 560 + 64  16 X 4 used 15  560 + 64 = 624
 ;
 
-  ORG 560                                                
+  ORG 560
  DB 11H,11H,11H,11H, FFH,FFH,FFH,FFH, FFH,FFH,FFH,FFH, FFH,FFH,FFH,FFH
-  ORG 576                                                  
+  ORG 576
  DB FFH,FFH,FFH,FFH, FFH,FFH,FFH,FFH, FFH,FFH,FFH,FFH, FFH,FFH,FFH,FFH
   ORG 592    ;        1                2                3
     DB FFH,FFH,FFH,FFH, FFH,FFH,FFH,FFH, FFH,FFH,FFH,FFH, FFH,FFH,FFH,FFH
@@ -234,4 +235,4 @@
 ;    1022  0x55 = ARMED,  0 = DISARMED
 ;    1023  Zone_Al     WAS ALARMS IN PREVIOS CYCLE RESETS ON ARM
      ORG 1010                                  ;1023
-     DB   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+     DB   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0'''

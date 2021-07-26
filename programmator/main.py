@@ -6,7 +6,6 @@ import tkinter as tk
 from tkinter import filedialog
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
-import tkinter.messagebox
 
 import logging
 log = logging.getLogger(__name__)

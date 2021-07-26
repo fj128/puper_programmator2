@@ -476,7 +476,7 @@ class MMC_Checkbutton(MMC_Bits):
     def __init__(self, parent, text: str, address: int, bit: int):
         super().__init__(text, address, [bit])
         self.var = tk.IntVar(parent)
-        self.control = tk.Checkbutton(parent, var=self.var, text=text)
+        self.control = tk.Checkbutton(parent, variable=self.var, text=text)
         self.default_value = '0'
 
 
@@ -607,7 +607,7 @@ class MMC_BCD(MMC_Bytes):
 
     def digit_to_char(self, d):
         if not 0 <= d <= 9:
-            raise Exception(f'{self}: недесятичная цифра в данных: {pretty_hexlify(d)}')
+            raise Exception(f'{self}: недесятичная цифра в данных: {d:X}')
         return str(d)
 
 
