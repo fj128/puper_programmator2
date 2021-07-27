@@ -28,15 +28,15 @@ setup(  name = 'puper_programmator2',
             Executable(
                 'programmator/main.py',
                 base=base,
-                target_name='programmator',
-                shortcut_name='puper_programmator2',
-                shortcut_dir='DesktopFolder'),
+                targetName='programmator',
+                shortcutName='puper_programmator2',
+                shortcutDir='DesktopFolder'),
             Executable(
                 'programmator/hexterminal.py',
                 base=base,
-                target_name='hexterminal'),
+                targetName='hexterminal'),
             Executable(
                 'programmator/intelhex.py',
                 # use default base for console application
-                target_name='intelhex'),
+                targetName='intelhex'),
         ])
