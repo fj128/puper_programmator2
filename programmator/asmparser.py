@@ -153,4 +153,5 @@ def compute_mapping(directives):
         if i not in m:
             log.warning(f'Undefined value at address {i}')
 
+    # Return a read-only dict!
     return MappingProxyType(m)

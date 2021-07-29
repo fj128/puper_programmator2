@@ -22,10 +22,6 @@ class PseudoMMC_Int(MMC_Bytes):
         self.to_memory_map_raw(val)
 
 
-    def set_default_value(self):
-        self.value = 0
-
-
 class PinStatus(enum.Enum):
     '''
     OPEN: pin = 0

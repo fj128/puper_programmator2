@@ -41,10 +41,8 @@ data = ''';E10MA00.ASM  E10 - version EPROM  MA - PANEL MAGELAN 00 SUBVERSION FO
         DB       0, 0, 10 , 10000100B, 13H,00H, 33H, 00H, 00H, 00H, 80H, FFH   ;PIN8
       ORG 108
         DB       2, 0, 10 , 10000100B, 14H,00H, 34H, 00H, 00H, 00H, 00H, FFH   ;PIN9  ARM
-        DB 0 ;CLS
       ORG 120
         DB       0, 0, 10 , 10000100B, 13H,02H, 33H, 02H, 00H, 00H, 00H, FFH   ;Pbat
-        DB 0 ;CLS
 ; PGM1 PGM2
 ; TA arm/disarm 0.05 sek | TI pulse 0..20 x 0.05 sek 20..255 x 1 sek
 ; pin9 ON(ARm),  pin9 OFF(Disarm),  pinx ON , pinx OFF,
@@ -128,7 +126,8 @@ data = ''';E10MA00.ASM  E10 - version EPROM  MA - PANEL MAGELAN 00 SUBVERSION FO
   DB  00H, 00H, 00H , 00H ;#12 PGM1
   DB  00H, 00H, 00H , 00H ;#13 PGM2
   ;464 + 13x4  = 516
-; ORG 516..520 GAP
+ORG 516 ; 516..520 GAP
+DB 0, 0, 0, 0
 
 ; Comand filters     520 (  5 x 8 = 40) .. 559
 

@@ -126,7 +126,11 @@ def populate_controls_from_memory_map():
                 # TODO: use compare when implemented
                 pass
             else:
-                control.from_memory_map()
+                try:
+                    control.from_memory_map()
+                except DataError as exc:
+                    log.error(exc)
+                    control.set_default_value()
 
 
 def populate_memory_map_from_controls():
@@ -135,17 +139,17 @@ def populate_memory_map_from_controls():
     for control in controls:
         if pinmanager.can_access_pin_protected or not control.pin_protected:
             control.to_memory_map()
-    return True
+            # TODO: do something with DataError
 
 
-def set_default_values():
+def set_default_values(a_controls: List['MMC_Base'] = None):
     global memory_map
     original_memory_map = memory_map
     try:
         memory_map = memory_map_factory_reset
-        for control in controls:
-            control.set_default_value()
+        for control in (a_controls or controls):
             control.from_memory_map()
+            # don't expect exceptions here
             if control.is_fixed_value:
                 control.make_control_readonly()
     finally:
@@ -162,15 +166,13 @@ def _get_appropriate_spans(pin_protected=None):
         return memory_spans_write_unprotected
 
 
-def write_from_memory_map(port, controller: ThreadController, do_factory_reset: bool):
+def write_from_memory_map(port, controller: ThreadController, do_factory_reset: bool = False):
     if do_factory_reset:
         spans = memory_spans_write_factory_reset
         l_memory_map = memory_map_factory_reset
     else:
         spans = _get_appropriate_spans()
         l_memory_map = memory_map
-
-    memory_spans, total_bytes = spans.spans, spans.total_bytes
 
     write_bytes = 0
     def write(start, data):
@@ -180,10 +182,10 @@ def write_from_memory_map(port, controller: ThreadController, do_factory_reset: 
         if resp is None:
             return False
         write_bytes += len(data)
-        controller.report_progress(write_bytes, total_bytes)
+        controller.report_progress(write_bytes, spans.total_bytes)
         return True
 
-    for start, end in memory_spans:
+    for start, end in spans.spans:
         if not write(start, [l_memory_map[i] for i in range(start, end)]):
             return False
 
@@ -224,7 +226,6 @@ def memory_map_from_str(s):
 def register_bit(control, address: int, bit: int):
     assert control is not None
     assert 0 <= bit < 8
-    assert not control.is_factory_reset_only
     assert not control.pin_protected
 
     def assert_not_used(other):
@@ -244,11 +245,7 @@ def register_byte(control, address: int):
     bits = bit_memory_registry.get(address, None)
     if bits:
         assert_not_used(next(iter(bits.values())))
-    if control.is_factory_reset_only:
-        assert not control.pin_protected
-        assert control.is_fixed_value
-    else:
-        byte_memory_registry[address] = control
+    byte_memory_registry[address] = control
 
 
 def int_from_bytes(b : bytes):
@@ -278,19 +275,42 @@ def bytes_to_str(val: bytes):
     return s
 
 
+def get_nibbles(val: Iterable[int]):
+    result = []
+    for b in val:
+        result.append(b >> 4)
+        result.append(b & 0xF)
+    return result
+
+
+def compose_nibbles(val: Iterable[int]):
+    result = []
+    first = True
+    for c in val:
+        if first:
+            result.append(c << 4)
+        else:
+            result[-1] |= c
+        first = not first
+    return result
+
+
+class DataError(Exception):
+    'Invalid user-provided or device data'
+
+
 # Base classes that deal with reading and writing memory, but not tk.
 
 class MMC_Base:
+    # Can be overriden in instances before calling super()
+    # because these are checked by register_byte()
+    is_fixed_value = False
+    pin_protected = False
+
     def __init__(self, description:str, base_address: str):
         self.base_address = base_address # for error reporting purposes
         self.description = description
-        self.default_value = ''
         self.var: object = None
-        # allow setting these these in derived classes before calling super()
-        # because these are checked by register_byte()
-        self.__dict__.setdefault('is_fixed_value', False)
-        self.__dict__.setdefault('pin_protected', False)
-        self.__dict__.setdefault('is_factory_reset_only', False)
         controls.append(self)
 
 
@@ -313,14 +333,9 @@ class MMC_Base:
         raise NotImplementedError()
 
 
-    def set_default_value(self):
-        assert self.var is not None
-        self.var.set(self.default_value)
-
-
     def clear(self):
-        # a separate method is sometimes needed for pin-protected controls
-        self.set_default_value()
+        # needed for pin-protected controls
+        self.var.set('')
 
 
     def make_control_readonly(self):
@@ -403,10 +418,6 @@ class MMC_FixedBit(MMC_Bits):
         self.to_memory_map_raw(self.value)
 
 
-    def set_default_value(self):
-        pass
-
-
 def make_fixed_bits(address: int, bits: Iterable[int]):
     return [MMC_FixedBit(address, bit) for bit in bits]
 
@@ -420,41 +431,11 @@ class MMC_FixedByte(MMC_Bytes):
     def from_memory_map(self):
         [val] = self.from_memory_map_raw()
         if val != self.value:
-            log.warning(f'{self}: фиксированный байт с неправильным значением: {val}')
+            log.warning(f'{self}: фиксированный байт с неправильным значением: {val} ожидалось: {self.value}')
 
 
     def to_memory_map(self):
         self.to_memory_map_raw([self.value])
-
-
-    def set_default_value(self):
-        pass
-
-
-class MMC_FactoryResetBytes(MMC_Bytes):
-    def __init__(self, address: int, values: List[int]):
-        # set these before super()
-        self.is_fixed_value = True
-        self.is_factory_reset_only = True
-        super().__init__('FactoryResetBytes', range(address, address + len(values)))
-        self.values = values
-
-
-    def to_memory_map(self):
-        self.to_memory_map_raw(self.values)
-
-    # No-ops
-
-    def from_memory_map(self):
-        pass
-
-
-    def set_default_value(self):
-        pass
-
-
-    def make_control_readonly(self):
-        pass
 
 
 # Actual controls
@@ -477,7 +458,6 @@ class MMC_Checkbutton(MMC_Bits):
         super().__init__(text, address, [bit])
         self.var = tk.IntVar(parent)
         self.control = tk.Checkbutton(parent, variable=self.var, text=text)
-        self.default_value = '0'
 
 
     def from_memory_map(self):
@@ -495,7 +475,6 @@ class MMC_Choice(MMC_Bits):
         self.var = tk.StringVar(parent)
         self.options_bin_to_str = options
         # Python3.6 preserves order of insertion, so this was the first option
-        self.default_value = next(iter(self.options_bin_to_str.values()))
         self.options_str_to_bin = {v: k for k, v in options.items()}
         self.control = tk.OptionMenu(parent, self.var, *self.options_str_to_bin.keys())
         tk_set_list_maxwidth(self.control, self.options_str_to_bin.keys())
@@ -506,8 +485,7 @@ class MMC_Choice(MMC_Bits):
         if val in self.options_bin_to_str:
             self.var.set(self.options_bin_to_str[val])
         else:
-            log.warning(f'Неправильное значение для {self!r}: {val}, используем значение по умолчанию')
-            self.set_default_value()
+            raise DataError(f'Неправильное значение для {self!r}: {val}')
 
 
     def to_memory_map(self):
@@ -524,7 +502,6 @@ class MMC_Int(MMC_Bytes):
         super().__init__(text, addresses)
         self.var = tk.StringVar(parent)
         self.control = tk.Entry(parent, textvariable=self.var)
-        self.default_value = '0'
 
 
     def from_memory_map(self):
@@ -567,7 +544,6 @@ class MMC_IP_Port(MMC_Bytes):
         super().__init__(text, range(address, address + self.ip_length + self.port_length))
         self.var = tk.StringVar(parent)
         self.control = tk.Entry(parent, textvariable=self.var)
-        self.default_value = '0.0.0.0:0000'
 
 
     def clear(self):
@@ -586,7 +562,7 @@ class MMC_IP_Port(MMC_Bytes):
         m = re.match(r'^(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}):(\d{1,5})$', s.strip())
         # TODO: more thorough check
         if not m:
-            raise Exception(f'{self}: неправильный формат: {s!r}')
+            raise DataError(f'{self}: неправильный формат: {s!r}')
 
         ip, port = m.groups()
         self.to_memory_map_raw(str_to_bytes(ip, self.ip_length) + str_to_bytes(port, self.port_length))
@@ -602,12 +578,11 @@ class MMC_BCD(MMC_Bytes):
         self.length = length
         self.var = tk.StringVar(parent)
         self.control = tk.Entry(parent, textvariable=self.var)
-        self.default_value = ''.join(self.digit_to_char(0) for _ in range(self.length))
 
 
     def digit_to_char(self, d):
         if not 0 <= d <= 9:
-            raise Exception(f'{self}: недесятичная цифра в данных: {d:X}')
+            raise DataError(f'{self}: недесятичная цифра в данных: {d:X}')
         return str(d)
 
 
@@ -617,33 +592,22 @@ class MMC_BCD(MMC_Bytes):
 
     def from_memory_map(self):
         val = self.from_memory_map_raw()
-        result = []
-        try:
-            for b in val:
-                result.append(self.digit_to_char(b >> 4))
-                if len(result) < self.length:
-                    result.append(self.digit_to_char(b & 0x0F))
-                elif b & 0x0F:
-                    raise Exception(f'{self}: последний ниббл в данных должен быть нулём: {pretty_hexlify(val)}')
-        except Exception as exc:
-            log.error(exc)
-            self.set_default_value()
-            return
-        assert len(result) == self.length
+        result = get_nibbles(val)
+        if len(result) != self.length:
+            assert len(result) == self.length + 1
+            if result[-1]:
+                log.warning(f'{self}: последний ниббл в данных должен быть нулём: {pretty_hexlify(val)}')
+            del result[-1]
+        result = [self.digit_to_char(d) for d in result]
         self.var.set(''.join(result))
 
 
     def to_memory_map(self):
         s = self.var.get().strip()
         if len(s) != self.length:
-            raise Exception(f'{self}: неправильная длина: {s!r} ({len(s)}), должна быть {self.length}')
+            raise DataError(f'{self}: неправильная длина: {s!r} ({len(s)}), должна быть {self.length}')
 
-        result = []
-        for i, c in enumerate(s):
-            if not i & 1:
-                result.append(self.char_to_digit(c) << 4)
-            else:
-                result[-1] |= self.char_to_digit(c)
+        result = compose_nibbles(map(self.char_to_digit, s))
         self.to_memory_map_raw(result)
 
 
@@ -662,6 +626,39 @@ class MMC_BCD_A(MMC_BCD.cls):
 
 
 @return_wrapped_control
+class MMC_BCD_PADDED(MMC_BCD.cls):
+    def from_memory_map(self):
+        val = self.from_memory_map_raw()
+        result = get_nibbles(val)
+        assert len(result) == self.length # don't allow odd lengths for simplicity
+
+        padding_idx = None
+        warned = False
+        for i, it in enumerate(result):
+            if it == 0x0F:
+                if padding_idx is None:
+                    padding_idx = i
+            elif padding_idx is not None and not warned:
+                log.warning(f'{self}: characters after padding: {pretty_hexlify(result)}')
+                warned = True
+        if padding_idx is not None:
+            del result[padding_idx : ]
+
+        result = [self.digit_to_char(d) for d in result]
+        self.var.set(''.join(result))
+
+
+    def to_memory_map(self):
+        s = self.var.get().strip()
+        if len(s) > self.length:
+            raise DataError(f'{self}: неправильная длина: {s!r} ({len(s)}), должна быть {self.length} или меньше')
+        result = [self.char_to_digit(c) for c in s]
+        result += [0xF] * (self.length - len(result))
+        result = compose_nibbles(result)
+        self.to_memory_map_raw(result)
+
+
+@return_wrapped_control
 class MMC_Time(MMC_Bytes):
     def __init__(self, parent, text: str, address: int, max_byte_value=255, fine_step=0.05, fine_count=20):
         super().__init__(text, [address])
@@ -674,8 +671,6 @@ class MMC_Time(MMC_Bytes):
         assert self.threshold == int(self.threshold)
         self.var = tk.StringVar(parent)
         self.control = tk.Entry(parent, textvariable=self.var)
-        # TODO: refactor formatting from to/from_memory_map.
-        self.default_value = '{:0.{decimals}f}'.format(0, decimals=self.decimals)
 
 
     def from_memory_map(self):
@@ -707,7 +702,6 @@ class MMC_LongTimeMinutes(MMC_Bytes):
         super().__init__(text, addresses)
         self.var = tk.StringVar(parent)
         self.control = tk.Entry(parent, textvariable=self.var)
-        self.default_value = '0'
 
 
     def from_memory_map(self):

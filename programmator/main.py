@@ -1,6 +1,5 @@
-import sys, re, string, threading, queue, time, traceback, functools
+import sys, threading, queue, traceback, functools
 from contextlib import contextmanager
-import enum
 
 import tkinter as tk
 from tkinter import filedialog
@@ -10,7 +9,7 @@ from tkinter.scrolledtext import ScrolledText
 import logging
 log = logging.getLogger(__name__)
 
-from programmator.utils import (tk_append_readonly_text, tk_center_window, set_high_DPI_awareness,
+from programmator.utils import (OkCancelDialog, tk_append_readonly_text, tk_center_window, set_high_DPI_awareness,
         CallbackLogHandler, encrypt_string, decrypt_string)
 from programmator.port_monitor import PortMonitor
 from programmator.progress_window import ProgressWindow
@@ -96,8 +95,9 @@ class Application:
         self.button_savefile = tk.Button(button_panel, text='Сохранить', command=self.cmd_savefile)
         self.button_savefile.pack(side=tk.LEFT)
 
-        self.button_savefile = tk.Button(button_panel, text='Записать фабричные настройки', command=self.cmd_write_factory_settings)
-        self.button_savefile.pack(side=tk.LEFT)
+        self.button_write_factory_settings = tk.Button(button_panel,
+            text='Записать фабричные настройки', command=self.cmd_write_factory_settings)
+        self.button_write_factory_settings.pack(side=tk.LEFT, padx=(5, 0))
 
         button_settings = tk.Button(button_panel, text='Настройки', state=tk.DISABLED)
         button_settings.pack(side=tk.RIGHT)
@@ -135,9 +135,10 @@ class Application:
 
         configure(self.button_read, connected)
         configure(self.button_write, connected)
-        configure(self.button_reset, connected)
-        configure(self.button_loadfile, connected)
-        configure(self.button_savefile, connected)
+        configure(self.button_reset, True)
+        configure(self.button_loadfile, True)
+        configure(self.button_savefile, True)
+        configure(self.button_write_factory_settings, connected)
 
 
     def log(self, s):
@@ -257,11 +258,11 @@ class Application:
             return
         try:
             log.info('Выгрузка данных из интерфейса в образ памяти')
-            if device_memory.populate_memory_map_from_controls():
-                # read back rounded values
-                device_memory.populate_controls_from_memory_map()
-                op = functools.partial(device_memory.write_from_memory_map)
-                self.readwrite_in_thread('Запись', op)
+            device_memory.populate_memory_map_from_controls()
+            # read back rounded values
+            device_memory.populate_controls_from_memory_map()
+            op = functools.partial(device_memory.write_from_memory_map)
+            self.readwrite_in_thread('Запись', op)
         except Exception as exc:
             log.error(exc)
             raise # tkinter will print it to stdout
@@ -272,25 +273,6 @@ class Application:
         device_memory.set_default_values()
         pinmanager.clear_pin()
         log.info(f'Настройки сброшены')
-
-
-    def cmd_write_factory_settings(self):
-        if not self.port_monitor.port:
-            log.error('Not connected')
-            return
-        try:
-            log.info('Запись фабричных настроек')
-            op = functools.partial(device_memory.write_from_memory_map, do_factory_reset=True)
-            self.readwrite_in_thread('Запись', op)
-            if self.readwrite_in_thread('Считывание', device_memory.read_into_memory_map):
-                pinmanager.check_pin(self.root)
-                log.info('Загрузка данных в интерфейс')
-                device_memory.populate_controls_from_memory_map()
-                log.info(f'Настройки считаны из устройства')
-        except Exception as exc:
-            log.error(exc)
-            raise # tkinter will print it to stdout
-        log.info(f'Настройки записаны в устройство')
 
 
     def cmd_loadfile(self):
@@ -316,6 +298,9 @@ class Application:
 
 
     def cmd_savefile(self):
+        # do this first to avoid creating corrupted files
+        device_memory.populate_memory_map_from_controls()
+
         file = filedialog.asksaveasfile(parent=self.root,
                 filetypes=[('hex', '*.hex')],
                 defaultextension='hex',
@@ -331,11 +316,34 @@ class Application:
             res = tk.messagebox.askquestion('Сохранить закрытые данные?', 'Сохранить в файл пин и закрытые им данные?', icon = 'warning')
             if res == 'yes':
                 pin_protected = True
-        # FIXME: this can result in an error
-        device_memory.populate_memory_map_from_controls()
         s = device_memory.memory_map_to_str(pin_protected)
         file.write(encrypt_string(s))
         log.info(f'Файл {file.name!r} записан')
+
+
+    def cmd_write_factory_settings(self):
+        if not self.port_monitor.port:
+            log.error('Not connected')
+            return
+
+        d = OkCancelDialog(self.frame, 'Подтверждение сброса на заводсткие установки',
+            'Вы уверены что хотите сбросить всю память устройства?')
+        if not d.result:
+            return
+
+        try:
+            log.info('Запись фабричных настроек')
+            op = functools.partial(device_memory.write_from_memory_map, do_factory_reset=True)
+            self.readwrite_in_thread('Запись', op)
+            if self.readwrite_in_thread('Считывание', device_memory.read_into_memory_map):
+                pinmanager.check_pin(self.root)
+                log.info('Загрузка данных в интерфейс')
+                device_memory.populate_controls_from_memory_map()
+                log.info(f'Настройки считаны из устройства')
+        except Exception as exc:
+            log.error(exc)
+            raise # tkinter will print it to stdout
+        log.info(f'Настройки записаны в устройство')
 
 
     def cmd_unbrick(self):

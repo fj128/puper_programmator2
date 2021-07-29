@@ -1,11 +1,12 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from tkinter.font import Font
+from programmator import device_memory
 
 from programmator.utils import VerticalScrolledFrame, tk_set_list_maxwidth, enumerate_first_last
 from programmator.device_memory import (finish_initialization, MMC_Checkbutton, MMC_FixedBit, MMC_Choice,
-    MMC_Int, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes,
-    MMC_Phone, MMC_FactoryResetBytes, make_fixed_bits)
+    MMC_BCD_PADDED, MMC_FixedByte, MMC_String, MMC_IP_Port, MMC_BCD, MMC_BCD_A, MMC_Time, MMC_LongTimeMinutes,
+    MMC_Phone, make_fixed_bits)
 from programmator.pinmanager import pinmanager
 
 import logging
@@ -70,12 +71,6 @@ def recursively_set_state(widget, state):
 
 
 def create_widgets(tabs):
-    # Master key + user codes, for Communicator panel
-    MMC_FactoryResetBytes(560, [0x11] * 8 + [0xFF] * 56)
-
-    # 3 device state bytes
-    MMC_FactoryResetBytes(1021, [0x00] * 3)
-
     def add_tab(name: str, header=''):
         page = ttk.Frame(tabs)
 
@@ -96,7 +91,7 @@ def create_widgets(tabs):
 
     page = add_tab('Настройки', 'Основные настройки')
 
-    ctrl = MMC_Int(page, 'Версия коммуникатора', [1011, 1010])
+    ctrl = MMC_BCD(page, 'Версия коммуникатора', 1011, 4)
     grid_label_and_control_mmc(ctrl)
     ctrl.mmc.make_control_readonly() # writing a version is OK?
 
@@ -165,8 +160,7 @@ def create_widgets(tabs):
             # then close or change pin
             pinmanager.change_pin(page.winfo_toplevel())
         else:
-            for it in pin_protected_controls:
-                it.mmc.set_default_value()
+            device_memory.set_default_values(c.mmc for c in pin_protected_controls)
             pinmanager.clear_pin()
 
     toggle_pin_status_button = tk.Button(page, text='---', command=toggle_pin_status)
@@ -255,7 +249,7 @@ def create_widgets(tabs):
         base_addr = 12 + i * 12
         bitmap_addr = base_addr + 3
 
-        ctrl = MMC_Checkbutton(frame, 'Вход задействован' if i != 9 else 'Задействован', bitmap_addr, 7)
+        ctrl = MMC_Checkbutton(frame, 'Вход задействован' if not is_input_ten else 'Задействован', bitmap_addr, 7)
         grid_control(ctrl, sticky='w')
 
         ctrl = MMC_Time(frame, 'Антидребезг (сек)', base_addr + 2, fine_count=300)
@@ -274,8 +268,8 @@ def create_widgets(tabs):
             ctrl = MMC_Checkbutton(frame, '24-х часовой', bitmap_addr, 2)
             grid_control(ctrl, column=2, sticky='w')
         else:
-            # #10-Battery must be always on, #9 doesn't matter but set to 0 just in case.
-            MMC_FixedBit(bitmap_addr, 2, int(is_input_ten))
+            # #10-Battery must be always on, #9 doesn't matter
+            MMC_FixedBit(bitmap_addr, 2, 1)
 
         ctrl = MMC_Checkbutton(frame, 'управление PGM1', bitmap_addr, 4)
         grid_control(ctrl, sticky='w')
@@ -298,13 +292,11 @@ def create_widgets(tabs):
         ctrl = MMC_BCD_A(frame, 'Команда срабатывания' if not is_input_nine else 'Команда постановки', base_addr + 4, 4)
         grid_label_and_control_mmc(ctrl)
         if is_input_ten:
-            ctrl.mmc.default_value = '13А2'
             ctrl.mmc.is_fixed_value = True
 
         ctrl = MMC_BCD_A(frame, 'Команда восстановления' if not is_input_nine else 'Команда снятия', base_addr + 6, 4)
         grid_label_and_control_mmc(ctrl, column=2)
         if is_input_ten:
-            ctrl.mmc.default_value = '33А2'
             ctrl.mmc.is_fixed_value = True
 
         ctrl = MMC_BCD(frame, 'Район', base_addr + 8, 2) # 00-99, 00
@@ -314,8 +306,8 @@ def create_widgets(tabs):
             ctrl = MMC_BCD(frame, 'Пользователь/Зона' if not is_input_nine else 'Пользователь', base_addr + 9, 3) # 000-999, 000
             grid_label_and_control_mmc(ctrl, column=2)
         else:
-            for i in range(3):
-                MMC_FixedByte(base_addr + 9 + i, 0x00)
+            MMC_FixedByte(base_addr + 9,  0x00)
+            MMC_FixedByte(base_addr + 10, 0x00)
 
         grid_separator(frame, False)
 
@@ -387,10 +379,10 @@ def create_widgets(tabs):
         base_row = next_grid_row(container)
 
         MMC_FixedByte(base_addr + 0) # CLS
-        ctrl = MMC_BCD(container, f'Телефон №{i + 1}', base_addr + 1, 8)
+        ctrl = MMC_BCD_PADDED(container, f'Телефон №{i + 1}', base_addr + 1, 8)
         grid_label_and_control_mmc(ctrl)
 
-        ctrl = MMC_BCD(container, f'PIN', base_addr + 6, 4)
+        ctrl = MMC_BCD_PADDED(container, f'PIN', base_addr + 6, 4)
         grid_label_and_control_mmc(ctrl)
 
         frame = tk.LabelFrame(container, text='Управление коммуникатором')

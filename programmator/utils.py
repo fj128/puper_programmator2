@@ -1,5 +1,6 @@
 import os
 import tkinter as tk
+from tkinter import commondialog
 import tkinter.font
 import logging
 from typing import Callable
@@ -265,7 +266,18 @@ class Dialog(tk.Toplevel):
         return True # override
 
     def apply(self):
-        pass # override
+        self.result = True # override
+
+
+class OkCancelDialog(Dialog):
+    def __init__(self, parent, title, text):
+        self.text = text
+        super().__init__(parent, title)
+
+
+    def body(self, master):
+        label = tk.Label(master, text=self.text)
+        label.pack()
 
 
 if __name__ == '__main__':
