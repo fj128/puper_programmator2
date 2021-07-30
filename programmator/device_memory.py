@@ -130,7 +130,7 @@ def populate_controls_from_memory_map():
                     control.from_memory_map()
                 except DataError as exc:
                     log.error(exc)
-                    control.set_default_value()
+                    # assume that it has previos value, don't reset to default_value individually
 
 
 def populate_memory_map_from_controls():
