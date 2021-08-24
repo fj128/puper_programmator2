@@ -87,7 +87,9 @@ class Application:
         self.button_write.pack(side=tk.LEFT)
 
         self.button_reset = tk.Button(button_panel, text='Сбросить', command=self.cmd_reset)
-        self.button_reset.pack(side=tk.LEFT)
+        if False:
+            # fixme: implement settings already
+            self.button_reset.pack(side=tk.LEFT)
 
         self.button_loadfile = tk.Button(button_panel, text='Из файла', command=self.cmd_loadfile)
         self.button_loadfile.pack(side=tk.LEFT, padx=(5, 0))
@@ -159,13 +161,9 @@ class Application:
 
     def start_polling_invoke_queue(self):
         try:
-            invoked_any = False
             while not self.invoke_queue.empty():
                 f, args, kwargs = self.invoke_queue.get(block=False)
                 f(*args, **kwargs)
-                invoked_any = True
-            # if invoked_any:
-            #     self.root.update_idletasks()
         finally:
             self.root.after(50, self.start_polling_invoke_queue)
 
@@ -259,6 +257,9 @@ class Application:
         try:
             log.info('Выгрузка данных из интерфейса в образ памяти')
             device_memory.populate_memory_map_from_controls()
+            # FIXME: dirty hack, if device type == keyboard then input 9 must be enabled
+            if device_memory.memory_map[3] & 0x07 == 6:
+                device_memory.memory_map[111] |= 0x80
             # read back rounded values
             device_memory.populate_controls_from_memory_map()
             op = functools.partial(device_memory.write_from_memory_map)

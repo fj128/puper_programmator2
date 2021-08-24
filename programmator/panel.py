@@ -91,9 +91,9 @@ def create_widgets(tabs):
 
     page = add_tab('Настройки', 'Основные настройки')
 
-    ctrl = MMC_BCD(page, 'Версия коммуникатора', 1011, 4)
+    ctrl = MMC_BCD(page, 'Версия коммуникатора', 1010, 4)
     grid_label_and_control_mmc(ctrl)
-    ctrl.mmc.make_control_readonly() # writing a version is OK?
+    ctrl.mmc.make_control_readonly() # writing version is OK
 
     ctrl = MMC_BCD(page, 'Номер коммуникатора', 0, 4)
     grid_label_and_control_mmc(ctrl)
@@ -101,7 +101,7 @@ def create_widgets(tabs):
     make_fixed_bits(2, range(1, 8))
 
     ctrl = MMC_Choice(page, 'Тип контрольной панели', 3, [2, 1, 0], {
-        0: 'Коммуникатор',
+        0: 'Модем',
         1: 'DALLAS',
         2: 'RING/TIP',
         3: 'MAGELLAN',
@@ -385,7 +385,7 @@ def create_widgets(tabs):
         ctrl = MMC_BCD_PADDED(container, f'PIN', base_addr + 6, 4)
         grid_label_and_control_mmc(ctrl)
 
-        frame = tk.LabelFrame(container, text='Управление коммуникатором')
+        frame = tk.LabelFrame(container, text='Управление модемом')
         frame.grid(row=base_row, column=3, rowspan=2, columnspan=2)
 
         bitmap_addr = base_addr + 5
