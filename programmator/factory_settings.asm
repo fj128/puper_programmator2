@@ -1,5 +1,4 @@
-# I gave up on importlib.
-data = ''';E10MA00.ASM  E10 - version EPROM  MA - PANEL MAGELAN 00 SUBVERSION FOR mAGELAN
+;E10MA00.ASM  E10 - version EPROM  MA - PANEL MAGELAN 00 SUBVERSION FOR mAGELAN
 ;MEMORY MAP
 ;06.08.2000  message groups changed to 8 in filter
 ;-------------------------------;
@@ -233,4 +232,4 @@ DB 0, 0, 0, 0
 ;    1022  0x55 = ARMED,  0 = DISARMED
 ;    1023  Zone_Al     WAS ALARMS IN PREVIOS CYCLE RESETS ON ARM
      ORG 1010                                  ;1023
-     DB   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0'''
+     DB   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0

@@ -8,6 +8,7 @@ base = None
 if sys.platform == "win32":
     base = "Win32GUI"
 
+data_files = ['programmator/factory_settings.asm']
 
 setup(  name = 'puper_programmator2',
         version = re.sub('[^0-9.]', '', __version__), # windows is upset with non 12.34.56 versions.
@@ -17,6 +18,7 @@ setup(  name = 'puper_programmator2',
                 # put everything into library.zip
                 'zip_include_packages': '*',
                 'zip_exclude_packages': [],
+                'zip_includes': [(f, f) for f in data_files],
                 # provide version in the BUILD_CONSTANTS module
                 'constants': [f'version="{__version__}"'],
             },

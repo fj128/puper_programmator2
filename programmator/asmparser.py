@@ -3,10 +3,11 @@ from typing import List, NoReturn
 from types import MappingProxyType
 from dataclasses import dataclass, field
 import logging as log
-from programmator import factory_settings
+import importlib.resources
+import programmator
 
 def load_factory_settings():
-    s = factory_settings.data.split('\n')
+    s = importlib.resources.read_text(programmator, 'factory_settings.asm').split('\n')
     parsed = parse_asm(s)
     return compute_mapping(parsed)
 
