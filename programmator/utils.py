@@ -283,6 +283,3 @@ class OkCancelDialog(Dialog):
 if __name__ == '__main__':
     from programmator.main import main
     main()
-    # s = encrypt_string('some string')
-    # print(s)
-    # print(decrypt_string(s))

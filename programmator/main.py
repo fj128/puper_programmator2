@@ -197,7 +197,7 @@ class Application:
             self.root.after(1000, self.start_scanning_ports)
 
 
-    def readwrite_in_thread(self, title, op):
+    def readwrite_in_thread(self, title, op, check_pin=False):
         pw = ProgressWindow(self.root, title)
         self.progress_window = pw # for logging
 
@@ -213,7 +213,11 @@ class Application:
             except:
                 log.exception(f'{title} failed')
             finally:
-                self.invoke_on_main_thread(pw.report_status, success)
+                def finalize():
+                    if success and check_pin:
+                        pinmanager.check_pin(pw.top)
+                    pw.report_status(success)
+                self.invoke_on_main_thread(finalize)
 
         worker = threading.Thread(target=worker_function)
 
@@ -243,8 +247,7 @@ class Application:
         if not self.port_monitor.port:
             log.error('Not connected')
             return
-        if self.readwrite_in_thread('Считывание', device_memory.read_into_memory_map):
-            pinmanager.check_pin(self.root)
+        if self.readwrite_in_thread('Считывание', device_memory.read_into_memory_map, check_pin=True):
             log.info('Загрузка данных в интерфейс')
             device_memory.populate_controls_from_memory_map()
             log.info(f'Настройки считаны из устройства')
@@ -336,8 +339,7 @@ class Application:
             log.info('Запись фабричных настроек')
             op = functools.partial(device_memory.write_from_memory_map, do_factory_reset=True)
             self.readwrite_in_thread('Запись', op)
-            if self.readwrite_in_thread('Считывание', device_memory.read_into_memory_map):
-                pinmanager.check_pin(self.root)
+            if self.readwrite_in_thread('Считывание', device_memory.read_into_memory_map, check_pin=True):
                 log.info('Загрузка данных в интерфейс')
                 device_memory.populate_controls_from_memory_map()
                 log.info(f'Настройки считаны из устройства')
