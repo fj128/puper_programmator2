@@ -257,7 +257,10 @@ def int_to_bytes(i: int, length: int):
 
 
 def str_to_bytes(s: str, length: int):
-    b = s.encode('utf-8')
+    if isinstance(s, bytes):
+        b = s
+    else:
+        b = s.encode('utf-8')
     padding = length - len(b)
     assert padding >= 0
     return b + b'\0' * padding
@@ -559,13 +562,17 @@ class MMC_IP_Port(MMC_Bytes):
 
     def to_memory_map(self):
         s = self.var.get()
-        m = re.match(r'^(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}):(\d{1,5})$', s.strip())
-        # TODO: more thorough check
+        m = re.match(r'^([a-zA-Z0-9_~.-]+):(\d{1,5})$', s.strip()) # https://www.urlencoder.io/learn/#url-encoding-percent-encoding
         if not m:
             raise DataError(f'{self}: неправильный формат: {s!r}')
 
         ip, port = m.groups()
-        self.to_memory_map_raw(str_to_bytes(ip, self.ip_length) + str_to_bytes(port, self.port_length))
+
+        ip_bytes = ip.encode('utf-8')
+        if len(ip_bytes) > 16:
+            raise DataError(f'{self}: слишком длинный адрес: {ip_bytes!r}')
+
+        self.to_memory_map_raw(str_to_bytes(ip_bytes, self.ip_length) + str_to_bytes(port, self.port_length))
 
 
 @return_wrapped_control
