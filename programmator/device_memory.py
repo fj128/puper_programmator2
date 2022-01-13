@@ -569,7 +569,7 @@ class MMC_IP_Port(MMC_Bytes):
         ip, port = m.groups()
 
         ip_bytes = ip.encode('utf-8')
-        if len(ip_bytes) > 16:
+        if len(ip_bytes) > self.ip_length:
             raise DataError(f'{self}: слишком длинный адрес: {ip_bytes!r}')
 
         self.to_memory_map_raw(str_to_bytes(ip_bytes, self.ip_length) + str_to_bytes(port, self.port_length))
